@@ -7,6 +7,14 @@ import type {
   DocumentListResponse,
   ProcessingStatus,
   DocumentType,
+  AgentRunSummary,
+  AgentRunDetail,
+  TraceStep,
+  SafetyReportResponse,
+  SummaryResponse,
+  DoctorReview,
+  PromptStrategy,
+  LearningMetrics,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
@@ -140,4 +148,70 @@ export const documents = {
 
 export const health = {
   check: () => request<{ status: string }>("/health"),
+};
+
+// ── Agent ─────────────────────────────────────────────────────────────────────
+
+export const agent = {
+  startRun: (patientId: string): Promise<{ run_id: string; patient_id: string; status: string; message: string }> =>
+    request(`/agent/patients/${patientId}/runs`, { method: "POST" }),
+
+  listRuns: (patientId: string): Promise<AgentRunSummary[]> =>
+    request(`/agent/patients/${patientId}/runs`),
+
+  getRun: (runId: string): Promise<AgentRunDetail> =>
+    request(`/agent/runs/${runId}`),
+
+  getTrace: (runId: string): Promise<TraceStep[]> =>
+    request(`/agent/runs/${runId}/trace`),
+
+  getKnowledgeBase: (runId: string): Promise<Record<string, unknown>> =>
+    request(`/agent/runs/${runId}/knowledge-base`),
+};
+
+// ── Summary ───────────────────────────────────────────────────────────────────
+
+export const summary = {
+  getSafetyReport: (patientId: string, runId: string): Promise<SafetyReportResponse> =>
+    request(`/summary/patients/${patientId}/runs/${runId}/safety`),
+
+  generate: (patientId: string, runId: string): Promise<SummaryResponse> =>
+    request(`/summary/patients/${patientId}/runs/${runId}/generate`, { method: "POST" }),
+
+  getSummary: (patientId: string, runId: string): Promise<SummaryResponse> =>
+    request(`/summary/patients/${patientId}/runs/${runId}/summary`),
+
+  getSummaryText: (patientId: string, runId: string): Promise<{ text: string }> =>
+    request(`/summary/patients/${patientId}/runs/${runId}/summary/text`),
+
+  approve: (patientId: string, runId: string, approvedBy: string): Promise<{ status: string; run_id: string }> =>
+    request(`/summary/patients/${patientId}/runs/${runId}/summary/approve`, {
+      method: "POST",
+      body: JSON.stringify({ approved_by: approvedBy }),
+    }),
+
+  reject: (patientId: string, runId: string, reason: string): Promise<{ status: string; run_id: string }> =>
+    request(`/summary/patients/${patientId}/runs/${runId}/summary/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+};
+
+// ── Learning ──────────────────────────────────────────────────────────────────
+
+export const learning = {
+  startReview: (runId: string): Promise<DoctorReview> =>
+    request(`/learning/runs/${runId}/review`, { method: "POST" }),
+
+  getReview: (reviewId: string): Promise<DoctorReview> =>
+    request(`/learning/reviews/${reviewId}`),
+
+  listReviews: (): Promise<DoctorReview[]> =>
+    request(`/learning/reviews`),
+
+  getMetrics: (): Promise<LearningMetrics> =>
+    request(`/learning/metrics`),
+
+  getStrategies: (): Promise<PromptStrategy[]> =>
+    request(`/learning/strategies`),
 };

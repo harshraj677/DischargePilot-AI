@@ -7,6 +7,61 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.database import Base
 
 
+# ── New Phase 8 tables ────────────────────────────────────────────────────────
+
+
+class LearningRun(Base):
+    """Records a single doctor review cycle with reward scores."""
+    __tablename__ = "learning_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    strategy_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    reward_total: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    edit_distance_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    section_accuracy_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    review_burden_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("idx_learning_runs_run_id", "run_id"),
+        Index("idx_learning_runs_strategy", "strategy_id"),
+        Index("idx_learning_runs_created", "created_at"),
+    )
+
+
+class LearningStrategy(Base):
+    """Prompt strategy variants tracked by the epsilon-greedy engine."""
+    __tablename__ = "learning_strategies"
+
+    id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prompt_template: Mapped[str] = mapped_column(Text, nullable=False)
+    total_uses: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    avg_reward: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class CorrectionMemoryEntry(Base):
+    """Stored correction patterns used as prompt hints in future generations."""
+    __tablename__ = "correction_memory_entries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    pattern: Mapped[str] = mapped_column(String(500), nullable=False)
+    correction: Mapped[str] = mapped_column(Text, nullable=False)
+    section_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    frequency: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    last_seen: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("idx_correction_memory_section", "section_name"),
+        Index("idx_correction_memory_freq", "frequency"),
+    )
+
+
 def new_uuid() -> str:
     return str(uuid.uuid4())
 

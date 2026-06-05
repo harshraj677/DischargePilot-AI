@@ -202,3 +202,155 @@ export const STATUS_LABELS: Record<DocumentStatus, string> = {
   FAILED: "Failed",
   EMPTY: "Empty",
 };
+
+// ── Agent Types ────────────────────────────────────────────────────────────────
+
+export type AgentRunStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "COMPLETED"
+  | "ESCALATED"
+  | "FAILED"
+  | "TIMED_OUT";
+
+export interface AgentRunSummary {
+  run_id: string;
+  patient_id: string;
+  status: AgentRunStatus;
+  iteration_count: number;
+  total_tokens: number;
+  completeness_score: number | null;
+  escalation_required: boolean;
+  created_at: string;
+  completed_at: string | null;
+  error_message: string | null;
+}
+
+export interface AgentRunDetail extends AgentRunSummary {
+  knowledge_base: Record<string, unknown> | null;
+  trace: TraceStep[] | null;
+  escalation_reasons: string[];
+  missing_information: string[];
+}
+
+export interface TraceStep {
+  step: number;
+  tool_name: string;
+  tool_input?: Record<string, unknown>;
+  tool_output?: Record<string, unknown>;
+  reasoning?: string;
+  duration_ms?: number;
+  tokens_in?: number;
+  tokens_out?: number;
+  state_changes?: Record<string, unknown>;
+  next_action?: string;
+  timestamp?: string;
+}
+
+// ── Safety Types ───────────────────────────────────────────────────────────────
+
+export type SafetyStatus = "APPROVED" | "REVIEW_REQUIRED" | "BLOCKED";
+export type FlagSeverity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
+export type FlagCategory =
+  | "MEDICATION_SAFETY"
+  | "DIAGNOSIS_CONFLICT"
+  | "MISSING_INFORMATION"
+  | "COMPLETENESS"
+  | "DOCUMENTATION_QUALITY"
+  | "CLINICAL_ACCURACY"
+  | "FOLLOWUP_REQUIRED";
+
+export interface ReviewFlag {
+  flag_id: string;
+  category: FlagCategory;
+  severity: FlagSeverity;
+  description: string;
+  section: string;
+  recommendation: string;
+  requires_acknowledgment: boolean;
+}
+
+export interface SafetyReportResponse {
+  report_id: string;
+  overall_status: SafetyStatus;
+  can_generate_summary: boolean;
+  safety_score: number;
+  completeness_score: number;
+  blocking_issues: string[];
+  warnings: string[];
+  flag_count: number;
+  critical_flag_count: number;
+}
+
+// ── Summary Types ──────────────────────────────────────────────────────────────
+
+export type SummaryReviewStatus = "PENDING_REVIEW" | "IN_REVIEW" | "APPROVED" | "REJECTED" | "ESCALATED";
+
+export interface SummarySectionResponse {
+  name: string;
+  content: string;
+  status: string;
+  flag_count: number;
+}
+
+export interface SummaryResponse {
+  summary_id: string;
+  patient_id: string;
+  agent_run_id: string;
+  status: SummaryReviewStatus;
+  completeness_score: number;
+  safety_score: number;
+  generated_at: string;
+  sections: SummarySectionResponse[];
+  review_flags: ReviewFlag[];
+  total_flags: number;
+  requires_acknowledgment_count: number;
+}
+
+// ── Learning Types (Phase 8) ───────────────────────────────────────────────────
+
+export interface EditRecord {
+  original_text: string;
+  edited_text: string;
+  section_name: string;
+  edit_type: string;
+  edit_distance: number;
+}
+
+export interface RewardScore {
+  total: number;
+  edit_distance_score: number;
+  section_accuracy_score: number;
+  review_burden_score: number;
+  breakdown: Record<string, number>;
+}
+
+export interface DoctorReview {
+  review_id: string;
+  run_id: string;
+  draft_summary_id: string | null;
+  edited_sections: Record<string, string>;
+  review_notes: string;
+  reward_score: RewardScore | null;
+  strategy_used: string | null;
+  created_at: string;
+}
+
+export interface PromptStrategy {
+  strategy_id: string;
+  name: string;
+  prompt_template: string;
+  variant: string;
+  total_uses: number;
+  avg_reward: number;
+  description: string;
+}
+
+export interface LearningMetrics {
+  total_reviews: number;
+  avg_reward: number;
+  avg_edit_distance: number;
+  improvement_rate: number;
+  best_strategy: string | null;
+  sessions_by_date: Array<{ date: string; avg_reward: number; count: number }>;
+}
