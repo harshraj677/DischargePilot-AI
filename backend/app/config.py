@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     EXTRACTION_TIMEOUT_SECONDS: int = 60
     MIN_PAGE_TEXT_LENGTH: int = 10
 
+    # Agent
+    AGENT_MAX_ITERATIONS: int = 15
+    AGENT_TOOL_TIMEOUT_SECONDS: int = 120
+
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_DIR: Path = BASE_DIR / "logs"
