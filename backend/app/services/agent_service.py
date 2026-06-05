@@ -16,7 +16,7 @@ from app.utils.exceptions import PatientNotFoundException
 from app.utils.logging import get_logger, AuditLogger
 
 logger = get_logger(__name__)
-audit = AuditLogger()
+audit = AuditLogger(module="agent_service")
 
 # Singleton Anthropic client shared across all agent runs
 _anthropic_client: AsyncAnthropic | None = None

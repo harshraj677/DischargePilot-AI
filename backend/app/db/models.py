@@ -96,3 +96,32 @@ class AgentRun(Base):
         Index("idx_agent_runs_patient", "patient_id"),
         Index("idx_agent_runs_status", "status"),
     )
+
+
+class DischargeReport(Base):
+    __tablename__ = "discharge_reports"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    patient_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    agent_run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # "draft" | "pending_review" | "approved" | "rejected"
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending_review", index=True)
+    summary_json: Mapped[str | None] = mapped_column(Text, nullable=True)       # JSON-serialized DischargeSummary
+    safety_report_json: Mapped[str | None] = mapped_column(Text, nullable=True) # JSON-serialized SafetyReport
+    completeness_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    safety_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    approved_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("idx_discharge_reports_patient", "patient_id"),
+        Index("idx_discharge_reports_run", "agent_run_id"),
+        Index("idx_discharge_reports_status", "status"),
+    )
