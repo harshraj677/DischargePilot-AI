@@ -1,0 +1,66 @@
+from enum import Enum
+
+
+class DocumentType(str, Enum):
+    ADMISSION_NOTE = "admission_note"
+    PROGRESS_NOTE = "progress_note"
+    LAB_REPORT = "lab_report"
+    MEDICATION_RECORD = "medication_record"
+    DISCHARGE_INSTRUCTION = "discharge_instruction"
+    UNKNOWN = "unknown"
+
+
+class DocumentStatus(str, Enum):
+    UPLOADED = "UPLOADED"
+    PROCESSING = "PROCESSING"
+    PROCESSED = "PROCESSED"
+    FAILED = "FAILED"
+    EMPTY = "EMPTY"
+
+
+class ClassificationMethod(str, Enum):
+    RULE_BASED = "rule_based"
+    LLM_ASSISTED = "llm_assisted"
+    USER_DECLARED = "user_declared"
+
+
+class AgentStatus(str, Enum):
+    PENDING = "PENDING"
+    PLANNING = "PLANNING"
+    EXECUTING = "EXECUTING"
+    RE_PLANNING = "RE_PLANNING"
+    SAFETY_VALIDATING = "SAFETY_VALIDATING"
+    GENERATING = "GENERATING"
+    COMPLETED = "COMPLETED"
+    ESCALATED = "ESCALATED"
+    FAILED = "FAILED"
+    INCOMPLETE = "INCOMPLETE"
+
+
+class SummaryStatus(str, Enum):
+    PENDING_REVIEW = "PENDING_REVIEW"
+    IN_REVIEW = "IN_REVIEW"
+    APPROVED = "APPROVED"
+    ESCALATED = "ESCALATED"
+    INCOMPLETE = "INCOMPLETE"
+
+
+class SafetySeverity(str, Enum):
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    INFO = "INFO"
+
+
+class ProcessingEvent(str, Enum):
+    UPLOAD_STARTED = "UPLOAD_STARTED"
+    UPLOAD_COMPLETED = "UPLOAD_COMPLETED"
+    UPLOAD_FAILED = "UPLOAD_FAILED"
+    EXTRACTION_STARTED = "EXTRACTION_STARTED"
+    EXTRACTION_COMPLETED = "EXTRACTION_COMPLETED"
+    EXTRACTION_FAILED = "EXTRACTION_FAILED"
+    EXTRACTION_RETRIED = "EXTRACTION_RETRIED"
+    CLASSIFICATION_COMPLETED = "CLASSIFICATION_COMPLETED"
+    METADATA_EXTRACTED = "METADATA_EXTRACTED"
+    PROCESSING_COMPLETED = "PROCESSING_COMPLETED"
+    PROCESSING_FAILED = "PROCESSING_FAILED"
