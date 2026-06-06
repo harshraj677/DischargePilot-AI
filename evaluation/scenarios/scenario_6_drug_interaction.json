@@ -1,0 +1,100 @@
+{
+  "scenario_id": "SCN-006",
+  "name": "Drug Interaction Patient",
+  "description": "Patient with a serious drug-drug interaction: Warfarin + Fluconazole (Warfarin potentiation — risk of bleeding). System must detect, flag for review, and require clinician acknowledgment. Summary can be generated with review flag.",
+  "clinical_context": {
+    "patient": {
+      "name": "Harold Fitzgerald",
+      "mrn": "MRN-2025-00602",
+      "dob": "1945-03-18",
+      "gender": "male",
+      "age": 80,
+      "ward": "Geriatrics 6A"
+    },
+    "admission": {
+      "date": "2025-06-05",
+      "chief_complaint": "Oral candidiasis, poor oral intake",
+      "attending": "Dr. Sarah Kim"
+    },
+    "diagnoses": [
+      {"name": "Oral candidiasis", "icd": "B37.0", "is_principal": true},
+      {"name": "Atrial Fibrillation, chronic", "icd": "I48.2", "is_principal": false},
+      {"name": "Deep Vein Thrombosis, history", "icd": "Z86.718", "is_principal": false},
+      {"name": "Malnutrition, mild", "icd": "E44.1", "is_principal": false}
+    ],
+    "allergies": [
+      {"allergen": "Aspirin", "reaction": "GI bleed", "severity": "severe"}
+    ],
+    "medications_admission": [
+      {"name": "Warfarin", "dose": "5mg", "frequency": "daily", "route": "PO"},
+      {"name": "Metoprolol", "dose": "25mg", "frequency": "BID", "route": "PO"},
+      {"name": "Omeprazole", "dose": "20mg", "frequency": "daily", "route": "PO"}
+    ],
+    "medications_discharge": [
+      {"name": "Warfarin", "dose": "5mg", "frequency": "daily", "route": "PO"},
+      {"name": "Metoprolol", "dose": "25mg", "frequency": "BID", "route": "PO"},
+      {"name": "Omeprazole", "dose": "20mg", "frequency": "daily", "route": "PO"},
+      {
+        "name": "Fluconazole",
+        "dose": "150mg",
+        "frequency": "weekly x4 weeks",
+        "route": "PO",
+        "new": true,
+        "interaction_note": "SERIOUS INTERACTION: Fluconazole inhibits CYP2C9, significantly potentiating Warfarin effect. INR monitoring required."
+      }
+    ],
+    "lab_results": [
+      {"test": "INR", "value": "2.4", "unit": "", "status": "THERAPEUTIC", "critical": false},
+      {"test": "Platelets", "value": "210", "unit": "K/uL", "status": "NORMAL", "critical": false},
+      {"test": "Albumin", "value": "2.8", "unit": "g/dL", "status": "LOW", "critical": false}
+    ],
+    "pending_results": [],
+    "drug_interactions": [
+      {
+        "drug_a": "Warfarin",
+        "drug_b": "Fluconazole",
+        "interaction_type": "pharmacokinetic",
+        "mechanism": "Fluconazole inhibits CYP2C9, the primary metabolic enzyme for Warfarin (S-enantiomer). This significantly increases Warfarin plasma concentration and anticoagulation effect.",
+        "severity": "serious",
+        "clinical_consequence": "Risk of supratherapeutic INR and major bleeding events",
+        "management": "Reduce Warfarin dose by 25-50%, monitor INR 2-3 times weekly during Fluconazole course",
+        "evidence_level": "Well-established — Class D interaction"
+      }
+    ],
+    "conflicts": [
+      {
+        "type": "drug_interaction",
+        "description": "Warfarin + Fluconazole: Serious CYP2C9-mediated interaction. Fluconazole will significantly potentiate Warfarin. INR monitoring plan required.",
+        "severity": "warning",
+        "resolved": false
+      }
+    ],
+    "hospital_course": "80-year-old male admitted with oral candidiasis causing poor oral intake. Evaluated by nutrition. Warfarin continued for AFib. Fluconazole prescribed for candida treatment.",
+    "discharge_condition": "Improved",
+    "follow_up": [
+      "PCP in 3 days for INR check",
+      "Anticoagulation clinic for INR monitoring during Fluconazole course",
+      "Nutrition follow-up in 2 weeks"
+    ]
+  },
+  "expected_outputs": {
+    "safety_status": "REVIEW_REQUIRED",
+    "safety_score_range": [0.70, 0.88],
+    "escalation_required": false,
+    "drug_interaction_detected": true,
+    "interaction_severity": "serious",
+    "can_generate_summary": true,
+    "review_flags_expected_min": 2,
+    "interaction_management_in_summary": true
+  },
+  "evaluation_criteria": {
+    "warfarin_fluconazole_detected": true,
+    "cyp2c9_mechanism_noted": true,
+    "inr_monitoring_recommendation": true,
+    "summary_generated_with_flags": true,
+    "drug_interaction_tool_fires": true,
+    "review_required_not_blocked": true
+  },
+  "documents_required": ["admission_note", "medication_record", "lab_report"],
+  "test_purpose": "Validates drug-drug interaction detection. Unlike the allergy conflict (SCN-005 which BLOCKS), this interaction is serious but manageable — system should allow summary generation with clinician review flags and management guidance."
+}

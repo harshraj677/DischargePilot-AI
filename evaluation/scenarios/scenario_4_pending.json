@@ -1,0 +1,99 @@
+{
+  "scenario_id": "SCN-004",
+  "name": "Patient With Pending Lab Results",
+  "description": "Patient discharged with multiple pending critical laboratory results. System must flag all pending results, assess clinical significance, and require review before allowing summary generation.",
+  "clinical_context": {
+    "patient": {
+      "name": "Samuel Abrams",
+      "mrn": "MRN-2025-00403",
+      "dob": "1950-11-05",
+      "gender": "male",
+      "age": 74,
+      "ward": "Oncology 5B"
+    },
+    "admission": {
+      "date": "2025-06-03",
+      "chief_complaint": "Fever, night sweats, unexplained weight loss",
+      "attending": "Dr. Priya Sharma"
+    },
+    "diagnoses": [
+      {
+        "name": "Lymphoma, unspecified — under evaluation",
+        "icd": "C85.90",
+        "is_principal": true
+      },
+      {
+        "name": "Fever of unknown origin",
+        "icd": "R50.9",
+        "is_principal": false
+      }
+    ],
+    "allergies": [
+      {"allergen": "Contrast dye", "reaction": "Urticaria", "severity": "moderate"}
+    ],
+    "medications_discharge": [
+      {"name": "Prednisone", "dose": "20mg", "frequency": "daily", "route": "PO"},
+      {"name": "Allopurinol", "dose": "300mg", "frequency": "daily", "route": "PO"},
+      {"name": "Ondansetron", "dose": "4mg", "frequency": "PRN nausea", "route": "PO"}
+    ],
+    "lab_results": [
+      {"test": "WBC", "value": "18.4", "unit": "K/uL", "status": "HIGH", "critical": false},
+      {"test": "LDH", "value": "850", "unit": "U/L", "status": "CRITICAL HIGH", "critical": true},
+      {"test": "Uric acid", "value": "9.8", "unit": "mg/dL", "status": "HIGH", "critical": false}
+    ],
+    "pending_results": [
+      {
+        "description": "Bone marrow biopsy — PENDING pathology review",
+        "clinical_significance": "CRITICAL — determines lymphoma diagnosis and staging",
+        "expected_date": "2025-06-07",
+        "ordered_by": "Dr. Priya Sharma"
+      },
+      {
+        "description": "Flow cytometry — PENDING",
+        "clinical_significance": "HIGH — lymphoma subtyping for treatment selection",
+        "expected_date": "2025-06-08",
+        "ordered_by": "Hematology"
+      },
+      {
+        "description": "CT Chest/Abdomen/Pelvis with contrast — PENDING radiology read",
+        "clinical_significance": "HIGH — staging workup",
+        "expected_date": "2025-06-06",
+        "ordered_by": "Dr. Priya Sharma"
+      },
+      {
+        "description": "SPEP/IPEP — PENDING",
+        "clinical_significance": "MEDIUM — rule out myeloma",
+        "expected_date": "2025-06-07",
+        "ordered_by": "Dr. Priya Sharma"
+      }
+    ],
+    "conflicts": [],
+    "hospital_course": "74-year-old male admitted with constitutional symptoms and elevated WBC. Extensive lymphoma workup initiated. Patient tolerated admission well. Oral steroids started empirically for presumed lymphoma-related symptoms.",
+    "discharge_condition": "Stable, workup pending",
+    "follow_up": [
+      "Hematology/Oncology in 3 days to review biopsy results",
+      "Primary Care for routine medications",
+      "Call immediately if fever >38.5°C or worsening symptoms"
+    ]
+  },
+  "expected_outputs": {
+    "safety_status": "REVIEW_REQUIRED",
+    "escalation_required": false,
+    "pending_results_flagged": 4,
+    "critical_pending_min": 1,
+    "review_flags_expected_min": 4,
+    "can_generate_summary": true,
+    "safety_score_range": [0.55, 0.80],
+    "pending_result_section_required": true
+  },
+  "evaluation_criteria": {
+    "all_pending_results_detected": true,
+    "critical_pending_flagged": true,
+    "pending_result_section_in_summary": true,
+    "follow_up_includes_result_review": true,
+    "no_fabrication_of_results": true,
+    "pending_validator_fires": true
+  },
+  "documents_required": ["admission_note", "lab_report", "oncology_consult"],
+  "test_purpose": "Validates that the system detects ALL pending results, correctly assesses their clinical significance, includes them in the summary's pending section, and requires clinician review before generating the final summary."
+}

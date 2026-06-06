@@ -1,0 +1,76 @@
+{
+  "scenario_id": "SCN-001",
+  "name": "Normal Discharge Patient",
+  "description": "Standard patient with complete documentation, clear diagnoses, reconciled medications, and no pending results or conflicts.",
+  "clinical_context": {
+    "patient": {
+      "name": "Margaret Chen",
+      "mrn": "MRN-2025-00100",
+      "dob": "1958-04-12",
+      "gender": "female",
+      "age": 67,
+      "ward": "Internal Medicine 3B"
+    },
+    "admission": {
+      "date": "2025-06-01",
+      "chief_complaint": "Shortness of breath and productive cough for 5 days",
+      "attending": "Dr. Robert Patel"
+    },
+    "diagnoses": [
+      {"name": "Community-acquired pneumonia", "icd": "J18.9", "is_principal": true},
+      {"name": "Type 2 Diabetes Mellitus, well-controlled", "icd": "E11.9", "is_principal": false},
+      {"name": "Hypertension, controlled", "icd": "I10", "is_principal": false}
+    ],
+    "allergies": [
+      {"allergen": "Sulfonamides", "reaction": "Rash", "severity": "mild"}
+    ],
+    "medications_admission": [
+      {"name": "Metformin", "dose": "500mg", "frequency": "BID", "route": "PO"},
+      {"name": "Amlodipine", "dose": "5mg", "frequency": "daily", "route": "PO"},
+      {"name": "Lisinopril", "dose": "10mg", "frequency": "daily", "route": "PO"}
+    ],
+    "medications_discharge": [
+      {"name": "Metformin", "dose": "500mg", "frequency": "BID", "route": "PO"},
+      {"name": "Amlodipine", "dose": "5mg", "frequency": "daily", "route": "PO"},
+      {"name": "Lisinopril", "dose": "10mg", "frequency": "daily", "route": "PO"},
+      {"name": "Azithromycin", "dose": "250mg", "frequency": "daily x5 days", "route": "PO", "new": true}
+    ],
+    "lab_results": [
+      {"test": "WBC", "value": "12.4", "unit": "K/uL", "status": "HIGH", "critical": false},
+      {"test": "Hemoglobin", "value": "13.2", "unit": "g/dL", "status": "NORMAL", "critical": false},
+      {"test": "Creatinine", "value": "0.9", "unit": "mg/dL", "status": "NORMAL", "critical": false},
+      {"test": "HbA1c", "value": "7.1", "unit": "%", "status": "ABOVE_TARGET", "critical": false}
+    ],
+    "pending_results": [],
+    "conflicts": [],
+    "hospital_course": "Patient admitted with community-acquired pneumonia. Treated with IV Ceftriaxone and transitioned to oral Azithromycin. Blood glucose well-controlled throughout stay. Blood pressure stable.",
+    "discharge_condition": "Stable — improved",
+    "follow_up": ["PCP in 1 week", "Repeat CXR in 6 weeks"]
+  },
+  "expected_outputs": {
+    "safety_status": "APPROVED",
+    "safety_score_min": 0.85,
+    "escalation_required": false,
+    "summary_sections_required": [
+      "patient_info",
+      "principal_diagnosis",
+      "hospital_course",
+      "discharge_medications",
+      "follow_up",
+      "discharge_condition"
+    ],
+    "conflicts_detected": 0,
+    "pending_results_flagged": 0,
+    "medication_changes": ["Azithromycin added"],
+    "review_flags_expected": 0,
+    "completeness_score_min": 0.85
+  },
+  "evaluation_criteria": {
+    "no_fabrication": true,
+    "evidence_coverage_min": 0.90,
+    "medication_reconciliation_accurate": true,
+    "pending_results_handled": true,
+    "allergy_check_passed": true
+  },
+  "documents_required": ["admission_note", "lab_report", "medication_record"]
+}

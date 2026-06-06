@@ -1,0 +1,59 @@
+{
+  "scenario_id": "SCN-002",
+  "name": "Patient With Missing Data",
+  "description": "Patient with incomplete documentation — missing follow-up instructions, discharge medications not clearly documented, and hospital course notes incomplete.",
+  "clinical_context": {
+    "patient": {
+      "name": "James Okonkwo",
+      "mrn": "MRN-2025-00201",
+      "dob": "1972-09-30",
+      "gender": "male",
+      "age": 52,
+      "ward": "Internal Medicine 2A"
+    },
+    "admission": {
+      "date": "2025-05-25",
+      "chief_complaint": "Chest pain",
+      "attending": "Dr. Lisa Torres"
+    },
+    "diagnoses": [
+      {"name": "NSTEMI", "icd": "I21.4", "is_principal": true}
+    ],
+    "allergies": [],
+    "medications_admission": [
+      {"name": "Aspirin", "dose": "81mg", "frequency": "daily", "route": "PO"}
+    ],
+    "medications_discharge": [],
+    "lab_results": [
+      {"test": "Troponin I", "value": "2.8", "unit": "ng/mL", "status": "CRITICAL HIGH", "critical": true},
+      {"test": "BNP", "value": "450", "unit": "pg/mL", "status": "HIGH", "critical": false}
+    ],
+    "pending_results": [],
+    "conflicts": [],
+    "hospital_course": "",
+    "discharge_condition": "Stable",
+    "follow_up": []
+  },
+  "expected_outputs": {
+    "safety_status": "BLOCKED",
+    "safety_score_max": 0.60,
+    "escalation_required": false,
+    "missing_information_detected": [
+      "discharge_medications",
+      "hospital_course",
+      "follow_up_instructions"
+    ],
+    "review_flags_expected_min": 2,
+    "completeness_score_max": 0.50,
+    "can_generate_summary": false
+  },
+  "evaluation_criteria": {
+    "missing_medication_list_detected": true,
+    "missing_hospital_course_detected": true,
+    "missing_follow_up_detected": true,
+    "safety_engine_blocks_generation": true,
+    "completeness_validator_fires": true
+  },
+  "documents_required": ["admission_note", "lab_report"],
+  "test_purpose": "Validates that the system correctly identifies missing critical information and blocks summary generation rather than fabricating content."
+}

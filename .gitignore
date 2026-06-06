@@ -78,3 +78,12 @@ htmlcov/
 
 # Alembic (keep versions, ignore cache)
 __pycache__/
+
+# Generated outputs (evaluation reports, generated summaries)
+outputs/reports/*.md
+outputs/evaluation/*.json
+outputs/summaries/
+outputs/traces/
+
+# Data directory (SQLite in production)
+data/*.db

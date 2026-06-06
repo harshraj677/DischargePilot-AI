@@ -1,0 +1,88 @@
+{
+  "scenario_id": "SCN-003",
+  "name": "Patient With Conflicting Diagnoses",
+  "description": "Patient where admission note states one diagnosis but discharge summary draft contradicts it. Also contains a conflicting medication dose between MAR and discharge prescriptions.",
+  "clinical_context": {
+    "patient": {
+      "name": "Patricia Nguyen",
+      "mrn": "MRN-2025-00302",
+      "dob": "1965-02-28",
+      "gender": "female",
+      "age": 60,
+      "ward": "Cardiology 4C"
+    },
+    "admission": {
+      "date": "2025-06-02",
+      "chief_complaint": "Chest pain, palpitations",
+      "attending": "Dr. Ahmed Khalil"
+    },
+    "diagnoses": [
+      {
+        "name": "Atrial Fibrillation with Rapid Ventricular Response",
+        "icd": "I48.91",
+        "is_principal": true,
+        "source": "admission_note"
+      },
+      {
+        "name": "Atrial Flutter",
+        "icd": "I48.3",
+        "is_principal": true,
+        "source": "cardiology_consult",
+        "note": "CONFLICTS with admission_note diagnosis"
+      }
+    ],
+    "allergies": [
+      {"allergen": "Amiodarone", "reaction": "Pulmonary toxicity", "severity": "life-threatening"}
+    ],
+    "medications_admission": [
+      {"name": "Warfarin", "dose": "5mg", "frequency": "daily", "route": "PO"},
+      {"name": "Metoprolol", "dose": "25mg", "frequency": "BID", "route": "PO"}
+    ],
+    "medications_discharge": [
+      {"name": "Warfarin", "dose": "2.5mg", "frequency": "daily", "route": "PO", "note": "DOSE CONFLICT: MAR shows 5mg, discharge Rx shows 2.5mg"},
+      {"name": "Metoprolol", "dose": "50mg", "frequency": "BID", "route": "PO"}
+    ],
+    "lab_results": [
+      {"test": "INR", "value": "3.8", "unit": "", "status": "HIGH", "critical": false, "note": "Supratherapeutic — explains dose reduction"},
+      {"test": "TSH", "value": "0.8", "unit": "mIU/L", "status": "NORMAL", "critical": false}
+    ],
+    "conflicts": [
+      {
+        "type": "diagnosis_conflict",
+        "description": "Admission note states AFib with RVR; cardiology consult states Atrial Flutter. These are distinct diagnoses with different management implications.",
+        "severity": "high",
+        "resolved": false
+      },
+      {
+        "type": "medication_dose_conflict",
+        "description": "Warfarin dose in MAR (5mg/day) conflicts with discharge prescription (2.5mg/day). INR 3.8 supports dose reduction but discrepancy must be documented.",
+        "severity": "critical",
+        "resolved": false
+      }
+    ],
+    "pending_results": [],
+    "hospital_course": "Patient admitted with palpitations and rapid heart rate. Cardioversion attempted. Rate control achieved with IV Metoprolol. Anticoagulation continued.",
+    "discharge_condition": "Improved",
+    "follow_up": ["Cardiology in 3 days", "INR check in 2 days", "Repeat ECG"]
+  },
+  "expected_outputs": {
+    "safety_status": "BLOCKED",
+    "safety_score_max": 0.40,
+    "escalation_required": true,
+    "conflicts_detected_min": 2,
+    "critical_conflicts": 1,
+    "review_flags_expected_min": 3,
+    "can_generate_summary": false,
+    "blocking_issues_min": 1
+  },
+  "evaluation_criteria": {
+    "diagnosis_conflict_detected": true,
+    "medication_dose_conflict_detected": true,
+    "escalation_triggered": true,
+    "allergy_conflict_check": true,
+    "conflict_validator_fires": true,
+    "medication_validator_fires": true
+  },
+  "documents_required": ["admission_note", "cardiology_consult", "medication_record", "lab_report"],
+  "test_purpose": "Validates conflict detection accuracy and that the system escalates rather than silently generating a summary with contradictory information."
+}

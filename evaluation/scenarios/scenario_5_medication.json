@@ -1,0 +1,96 @@
+{
+  "scenario_id": "SCN-005",
+  "name": "Medication Conflict Patient",
+  "description": "Patient with a documented allergy to Penicillin who is being prescribed Amoxicillin (a penicillin-class antibiotic) at discharge. System must detect this life-threatening allergy conflict and block summary generation.",
+  "clinical_context": {
+    "patient": {
+      "name": "Elena Rodriguez",
+      "mrn": "MRN-2025-00501",
+      "dob": "1980-07-14",
+      "gender": "female",
+      "age": 44,
+      "ward": "Internal Medicine 1A"
+    },
+    "admission": {
+      "date": "2025-06-04",
+      "chief_complaint": "Productive cough, fever, pleuritic chest pain",
+      "attending": "Dr. James Weber"
+    },
+    "diagnoses": [
+      {"name": "Community-acquired pneumonia", "icd": "J18.9", "is_principal": true},
+      {"name": "Pleuritis", "icd": "R09.1", "is_principal": false}
+    ],
+    "allergies": [
+      {
+        "allergen": "Penicillin",
+        "reaction": "Anaphylaxis — intubated in 2019",
+        "severity": "life-threatening",
+        "documented_in": "Allergy band, admission note, MAR header"
+      },
+      {
+        "allergen": "NSAIDs",
+        "reaction": "Bronchospasm",
+        "severity": "severe"
+      }
+    ],
+    "medications_admission": [
+      {"name": "Azithromycin", "dose": "500mg", "frequency": "daily", "route": "IV"},
+      {"name": "Acetaminophen", "dose": "650mg", "frequency": "Q6H PRN", "route": "PO"}
+    ],
+    "medications_discharge": [
+      {
+        "name": "Amoxicillin",
+        "dose": "500mg",
+        "frequency": "TID x7 days",
+        "route": "PO",
+        "note": "CRITICAL ALERT: Patient has documented life-threatening Penicillin allergy. Amoxicillin is a penicillin-class antibiotic."
+      },
+      {"name": "Acetaminophen", "dose": "650mg", "frequency": "Q6H PRN", "route": "PO"}
+    ],
+    "lab_results": [
+      {"test": "WBC", "value": "14.2", "unit": "K/uL", "status": "HIGH", "critical": false},
+      {"test": "CRP", "value": "84", "unit": "mg/L", "status": "HIGH", "critical": false},
+      {"test": "Procalcitonin", "value": "1.2", "unit": "ng/mL", "status": "HIGH", "critical": false}
+    ],
+    "pending_results": [
+      {
+        "description": "Sputum culture — PENDING",
+        "clinical_significance": "MEDIUM — antibiotic sensitivity",
+        "expected_date": "2025-06-07"
+      }
+    ],
+    "conflicts": [
+      {
+        "type": "medication_allergy",
+        "description": "Amoxicillin (penicillin-class) prescribed at discharge despite documented life-threatening anaphylaxis to Penicillin (2019 ICU admission).",
+        "severity": "critical",
+        "resolved": false,
+        "involved_items": ["Amoxicillin", "Penicillin allergy"]
+      }
+    ],
+    "hospital_course": "44-year-old female admitted with community-acquired pneumonia. Treated with IV Azithromycin with good clinical response. Transitioned to oral antibiotics at discharge.",
+    "discharge_condition": "Improved, afebrile",
+    "follow_up": ["PCP in 3 days", "Repeat CXR in 4 weeks"]
+  },
+  "expected_outputs": {
+    "safety_status": "BLOCKED",
+    "safety_score_max": 0.40,
+    "escalation_required": true,
+    "allergy_conflict_detected": true,
+    "critical_conflicts": 1,
+    "can_generate_summary": false,
+    "blocking_issues": ["Amoxicillin prescribed despite life-threatening Penicillin allergy"],
+    "review_flags_expected_min": 2
+  },
+  "evaluation_criteria": {
+    "penicillin_amoxicillin_conflict_detected": true,
+    "critical_severity_assigned": true,
+    "summary_blocked": true,
+    "escalation_triggered": true,
+    "medication_validator_fires": true,
+    "conflict_validator_fires": true,
+    "no_fabrication": true
+  },
+  "documents_required": ["admission_note", "medication_record", "lab_report"],
+  "test_purpose": "THE most critical safety test. Validates that the allergy-medication conflict detection is functioning correctly and that the system NEVER generates a summary with a life-threatening medication-allergy conflict present."
+}
