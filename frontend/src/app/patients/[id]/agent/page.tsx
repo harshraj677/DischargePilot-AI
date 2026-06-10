@@ -38,7 +38,10 @@ const TOOL_META: Record<string, { label: string; icon: React.ReactNode; color: s
   knowledge_synthesizer: { label: "Knowledge Synthesizer", icon: <Brain className="h-4 w-4" />, color: "text-indigo-600 bg-indigo-100" },
 };
 
-function getToolMeta(toolName: string) {
+function getToolMeta(toolName: string | undefined) {
+  if (!toolName || typeof toolName !== 'string') {
+    return { label: "Unknown Tool", icon: <Zap className="h-4 w-4" />, color: "text-slate-600 bg-slate-100" };
+  }
   const key = Object.keys(TOOL_META).find((k) => toolName.toLowerCase().includes(k.toLowerCase()));
   return key ? TOOL_META[key] : { label: toolName, icon: <Zap className="h-4 w-4" />, color: "text-slate-600 bg-slate-100" };
 }
@@ -347,7 +350,7 @@ export default function AgentPage() {
             ) : (
               <div className="divide-y divide-slate-50">
                 {traceSteps.map((step, i) => {
-                  const meta = getToolMeta(step.tool_name);
+                  const meta = getToolMeta(step.selected_tool);
                   return (
                     <div key={i} className="flex items-start gap-3 px-5 py-3.5">
                       <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-xs ${meta.color}`}>

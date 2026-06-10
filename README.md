@@ -15,7 +15,8 @@
 Hospital discharge summaries are critical clinical documents — but 70% of hospital readmissions within 30 days are linked to documentation gaps at discharge. Physicians spend 2-3 hours per patient manually synthesizing information from admission notes, lab reports, medication records, and consult notes.
 
 **DischargePilot AI automates this synthesis** using an agentic AI pipeline that:
-- Extracts structured clinical knowledge from unstructured documents
+- Extracts structured clinical knowledge from unstructured documents (native PDF text AND scanned images)
+- Processes scanned hospital documents, image-based clinical reports, and handwritten notes via OCR
 - Detects medication conflicts, drug interactions, and diagnosis contradictions
 - Validates every generated fact against source documents (zero fabrication tolerance)
 - Surfaces all pending lab results and flags them for clinician review
@@ -34,10 +35,15 @@ Hospital discharge summaries are critical clinical documents — but 70% of hosp
 │  │ Patient Dashboard│◄─REST────►│ API Layer (6 routers)    │    │
 │  │ Agent Trace View │           │ Service Layer (7 svcs)   │    │
 │  │ Safety Report    │           │ ┌──────────────────────┐ │    │
-│  │ Summary Editor   │           │ │  AGENT ENGINE        │ │    │
-│  │ Learning Panel   │           │ │  Planner (Claude)    │ │    │
-│  │ Analytics Board  │           │ │  11 Clinical Tools   │ │    │
-│  └──────────────────┘           │ │  Decision Engine     │ │    │
+│  │ Summary Editor   │           │ │  OCR MODULE          │ │    │
+│  │ Learning Panel   │           │ │  Page Classifier     │ │    │
+│  │ Analytics Board  │           │ │  Multi-Provider OCR  │ │    │
+│  └──────────────────┘           │ │  Safety Validator    │ │    │
+│                                 │ ├──────────────────────┤ │    │
+│                                 │ │  AGENT ENGINE        │ │    │
+│                                 │ │  Planner (Claude)    │ │    │
+│                                 │ │  11 Clinical Tools   │ │    │
+│                                 │ │  Decision Engine     │ │    │
 │                                 │ │  Trace Recorder      │ │    │
 │                                 │ ├──────────────────────┤ │    │
 │                                 │ │  SAFETY ENGINE       │ │    │
@@ -50,7 +56,7 @@ Hospital discharge summaries are critical clinical documents — but 70% of hosp
 │                                 └──────────────────────────┘    │
 │                                          │                      │
 │                                    Anthropic API                 │
-│                                  (Claude claude-sonnet-4-6)     │
+│                              (Claude for OCR + Planning)         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -59,13 +65,23 @@ Hospital discharge summaries are critical clinical documents — but 70% of hosp
 ## System Workflow
 
 ```
-Patient Documents (PDF)
+Patient Documents (PDF, Scanned, Images)
         │
         ▼
-┌─────────────────┐
-│ PDF Processing  │  PyMuPDF extraction + chunking + classification
-└────────┬────────┘
-         ▼
+┌─────────────────────────────────┐
+│ OCR & PDF Processing            │
+│ • Page Classification            │
+│ • Native text extraction         │
+│ • Image OCR (Claude Vision)      │
+│ • Handwriting detection          │
+│ • Multi-provider fallback        │
+│ • Safety validation              │
+└────────────────────┬─────────────┘
+                     ▼
+┌─────────────────────────────────┐
+│ PDF Text + OCR Results          │  Combined text with confidence scoring
+└────────────────────┬─────────────┘
+                     ▼
 ┌─────────────────┐
 │ Agent Planner   │  Claude generates dependency-ordered task graph
 └────────┬────────┘
@@ -96,14 +112,18 @@ Patient Documents (PDF)
 
 | Layer | Technology | Purpose |
 |-------|------------|---------|
-| **AI Model** | Claude claude-sonnet-4-6 (Anthropic) | Clinical extraction, summary generation |
+| **AI Model** | Claude claude-sonnet-4-6 (Anthropic) | Clinical extraction, summary generation, OCR |
 | **Backend** | FastAPI (Python 3.11+) | REST API, async processing |
 | **Database** | SQLite + SQLAlchemy | Patient data, documents, summaries |
 | **PDF Processing** | PyMuPDF (fitz) | Text extraction with page indexing |
+| **OCR - Primary** | Claude Vision API (Anthropic) | Medical document OCR, handwriting support |
+| **OCR - Fallback** | EasyOCR | Lightweight secondary OCR provider |
+| **OCR - Fallback** | Tesseract OCR | Reliable tertiary OCR provider |
+| **Image Processing** | Pillow (PIL) + OpenCV | Image optimization and conversion |
 | **Frontend** | Next.js 15, React 19, TypeScript | Clinical dashboard SPA |
 | **UI** | Tailwind CSS, Radix UI, shadcn/ui | Healthcare design system |
 | **Charts** | Recharts | Analytics visualizations |
-| **Testing** | pytest, pytest-asyncio, FastAPI TestClient | Unit + integration |
+| **Testing** | pytest, pytest-asyncio, FastAPI TestClient | Unit + integration + OCR tests |
 | **Containerization** | Docker, Docker Compose | Deployment |
 
 ---
@@ -179,7 +199,10 @@ source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env       # Add ANTHROPIC_API_KEY
 python -c "from app.db.database import engine; from app.db import models; models.Base.metadata.create_all(engine)"
+python -m pip install uvicorn
 uvicorn app.main:app --reload
+or 
+python -m uvicorn app.main:app --reload
 ```
 
 ### Frontend
@@ -274,13 +297,28 @@ dischargepilot-ai/
 ├── backend/
 │   ├── app/
 │   │   ├── agent/          # Agent engine + 11 clinical tools
+│   │   ├── ocr/            # OCR module (12 components, 3500+ lines)
+│   │   │   ├── models/     # OCR data models
+│   │   │   ├── providers/  # Claude, EasyOCR, Tesseract implementations
+│   │   │   ├── page_classifier.py         # Page type detection
+│   │   │   ├── image_extractor.py         # PDF → Image rendering
+│   │   │   ├── fallback_engine.py         # Multi-provider orchestration
+│   │   │   ├── handwriting_processor.py   # Handwriting with confidence scoring
+│   │   │   ├── orchestrator.py            # Complete pipeline orchestration
+│   │   │   ├── safety_validator.py        # Clinical safety validation
+│   │   │   └── integration.py             # Integration with PDF extractor
 │   │   ├── safety/         # Safety engine + 5 validators
-│   │   ├── knowledge/      # Patient Knowledge Repository
+│   │   ├── knowledge/      # Patient Knowledge Repository (Enhanced with OCR metadata)
 │   │   ├── learning/       # RLHF learning system
 │   │   ├── processing/     # PDF pipeline
 │   │   ├── summary/        # Summary generator
 │   │   └── observability/  # Metrics + audit logging
-│   └── tests/              # Unit + integration tests
+│   └── tests/
+│       ├── test_ocr/       # OCR test suite (5 modules, 800+ lines)
+│       ├── test_agent/     # Agent tests
+│       ├── test_safety/    # Safety tests
+│       ├── test_learning/  # Learning system tests
+│       └── integration/    # End-to-end tests
 ├── frontend/
 │   └── src/app/            # 8 clinical dashboard pages
 ├── evaluation/
@@ -289,9 +327,16 @@ dischargepilot-ai/
 │   ├── runner.py           # Scenario runner
 │   ├── report_generator.py # Automated reports
 │   └── clinical_safety_eval.py # Safety validation
-├── docs/                   # Architecture documentation
+├── docs/
+│   ├── 01-19/              # Original architecture docs
+│   ├── 20_OCR_VISION_ENHANCEMENT_GUIDE.md      # OCR integration guide (400 lines)
+│   ├── 21_OCR_IMPLEMENTATION_SUMMARY.md        # OCR architecture overview (300 lines)
+│   ├── 22_OCR_QUICK_REFERENCE.md               # OCR API reference (400 lines)
+│   ├── 23_OCR_DELIVERY_SUMMARY.md              # OCR project summary (400 lines)
+│   └── 24_OCR_DOCUMENTATION_INDEX.md           # OCR documentation index (300 lines)
 ├── scripts/                # Setup and utility scripts
 ├── docker-compose.yml
+├── COMPLETION_SUMMARY.md   # OCR completion summary
 └── .env.example
 ```
 
@@ -304,8 +349,44 @@ dischargepilot-ai/
 3. **SQLite** — Development database; production requires PostgreSQL
 4. **English Only** — Optimized for English clinical documents
 5. **Drug Interactions** — Uses Claude knowledge, not a dedicated pharmacology database
+6. **OCR Confidence** — Handwritten content requires manual review for clinical safety
 
 ---
+
+## Features Added (OCR & Vision Enhancement)
+
+### ✅ Multi-Document Format Support
+- Native PDF text extraction
+- Scanned hospital documents (OCR required)
+- Image-based clinical reports
+- Embedded images within PDFs
+- Handwritten consultation notes
+
+### ✅ Multi-Provider OCR with Fallback
+- **Claude Vision** (primary) — Best for medical documents + handwriting support
+- **EasyOCR** (fallback) — Lightweight alternative
+- **Tesseract** (fallback) — Reliable backup
+- Automatic provider selection based on confidence scoring
+
+### ✅ Clinical Safety for OCR
+- 3-tier safety levels: SAFE / CONDITIONAL / UNSAFE
+- Confidence threshold validation
+- Clinical keyword detection (medications, allergies, contraindications)
+- Handwriting flagging (always requires manual review)
+- Complete evidence chain preservation
+- Zero fabrication guarantee
+
+### ✅ Handwriting & Uncertainty Handling
+- Handwriting detection with confidence scoring
+- Uncertainty marking for OCR results
+- Manual review requirements for low-confidence extractions
+- Review report generation for clinical staff
+
+### ✅ OCR Integration Features
+- Backward compatible with existing PDF extractor
+- Enhanced EvidencedFact model tracks OCR source and confidence
+- Performance optimization (skips OCR for native text pages)
+- Comprehensive logging and tracing
 
 ## Future Improvements
 
@@ -315,6 +396,8 @@ dischargepilot-ai/
 - Parallel tool execution
 - Role-based access control (physician / nurse / admin)
 - Fine-tuned clinical language model
+- Additional OCR providers (Google Cloud Vision, Azure Form Recognizer)
+- Real-time OCR confidence monitoring dashboard
 
 ---
 
@@ -325,3 +408,4 @@ MIT License — see [LICENSE](LICENSE)
 ---
 
 *DischargePilot AI — Built with Claude claude-sonnet-4-6 by Harsh Raj, 2025*
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4

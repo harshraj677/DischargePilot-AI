@@ -25,6 +25,20 @@ class EvidencedFact(BaseModel):
     page_number: int
     evidence: str = Field(description="Verbatim excerpt from source — max 500 chars")
     extracted_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # OCR-specific fields (optional, for OCR-extracted facts)
+    extraction_method: Optional[str] = Field(
+        default=None,
+        description="'native' for PDF text extraction, 'ocr' for OCR-extracted"
+    )
+    ocr_provider: Optional[str] = Field(
+        default=None,
+        description="OCR provider used (e.g., 'claude', 'easyocr', 'tesseract')"
+    )
+    requires_manual_review: bool = Field(
+        default=False,
+        description="Whether OCR result requires manual clinical review"
+    )
 
     @property
     def confidence_level(self) -> ConfidenceLevel:
@@ -36,6 +50,10 @@ class EvidencedFact(BaseModel):
 
     def short_evidence(self, max_len: int = 120) -> str:
         return self.evidence[:max_len] + "…" if len(self.evidence) > max_len else self.evidence
+    
+    def is_ocr_extracted(self) -> bool:
+        """Check if this fact was extracted via OCR."""
+        return self.extraction_method == "ocr"
 
 
 class PatientDemographics(BaseModel):

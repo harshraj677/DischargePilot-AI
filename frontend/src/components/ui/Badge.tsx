@@ -133,6 +133,7 @@ export function DocumentStatusBadge({ status }: { status: DocumentStatus }) {
     PROCESSED: "success",
     FAILED: "critical",
     EMPTY: "default",
+    REVIEW_REQUIRED: "warning",
   };
   return <Badge variant={map[status]}>{status}</Badge>;
 }

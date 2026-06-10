@@ -4,7 +4,7 @@ import json
 import uuid
 from datetime import datetime
 
-from anthropic import AsyncAnthropic
+from app.gemini.client import GeminiClient, get_gemini_client
 from sqlalchemy.orm import Session
 
 from app.agent.loop import AgentLoop
@@ -19,13 +19,13 @@ logger = get_logger(__name__)
 audit = AuditLogger(module="agent_service")
 
 # Singleton Anthropic client shared across all agent runs
-_anthropic_client: AsyncAnthropic | None = None
+_anthropic_client: GeminiClient | None = None
 
 
 def _get_client() -> AsyncAnthropic:
     global _anthropic_client
     if _anthropic_client is None:
-        _anthropic_client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        _anthropic_client = get_gemini_client()
     return _anthropic_client
 
 

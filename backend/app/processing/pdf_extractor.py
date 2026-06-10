@@ -137,7 +137,22 @@ def extract_pdf(
     non_empty_chars = sum(c.char_count for c in page_chunks if not c.is_empty)
 
     if non_empty_chars < settings.MIN_PAGE_TEXT_LENGTH * 2:
-        raise PDFEmptyException(filename)
+        # No native text extracted — likely a scanned/image-only PDF.
+        # Don't fail here: let the caller run OCR fallback before deciding.
+        logs.append(
+            _make_log(
+                "NO_NATIVE_TEXT",
+                f"No extractable native text found across {page_count} page(s); "
+                f"document may be scanned/image-only — OCR fallback may be required",
+                {"page_count": page_count, "non_empty_chars": non_empty_chars},
+            )
+        )
+        logger.info(
+            "PDF has no native text — OCR fallback may be required",
+            document_id=document_id,
+            filename=filename,
+            page_count=page_count,
+        )
 
     duration_ms = (time.perf_counter() - start_time) * 1000
     logs.append(

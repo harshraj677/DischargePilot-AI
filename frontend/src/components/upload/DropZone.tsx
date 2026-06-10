@@ -9,8 +9,8 @@ interface DropZoneProps {
   maxSizeMB?: number;
 }
 
-const ACCEPTED_TYPES = ["application/pdf"];
-const ACCEPTED_EXTENSIONS = [".pdf"];
+const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+const ACCEPTED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
 
 export function DropZone({
   onFilesSelected,
@@ -25,8 +25,8 @@ export function DropZone({
     const errors: string[] = [];
 
     for (const file of files) {
-      if (!ACCEPTED_TYPES.includes(file.type) && !file.name.toLowerCase().endsWith(".pdf")) {
-        errors.push(`"${file.name}" is not a PDF file.`);
+      if (!ACCEPTED_TYPES.includes(file.type) && !file.name.toLowerCase().match(/\.(pdf|jpg|jpeg|png|webp)$/)) {
+        errors.push(`"${file.name}" is not a supported file type (PDF/Images).`);
         continue;
       }
       if (file.size > maxSizeMB * 1024 * 1024) {
@@ -90,7 +90,7 @@ export function DropZone({
           disabled={disabled}
           onChange={onInputChange}
           className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
-          aria-label="Upload PDF files"
+          aria-label="Upload PDF or Image files"
         />
 
         <div className={[
@@ -105,11 +105,11 @@ export function DropZone({
         </div>
 
         <p className="text-sm font-500 text-slate-700">
-          {isDragging ? "Drop PDF files here" : "Drag & drop PDF files here"}
+          {isDragging ? "Drop files here" : "Drag & drop PDF or Image files here"}
         </p>
         <p className="mt-1 text-xs text-slate-500">or click to browse</p>
         <p className="mt-3 text-xs text-slate-400">
-          PDF only · Maximum {maxSizeMB}MB per file · Multiple files supported
+          PDF & Images (JPG, PNG, WEBP) · Max {maxSizeMB}MB per file · Multiple files supported
         </p>
       </div>
 

@@ -91,19 +91,21 @@ class MedicationReconciliationTool(BaseTool):
         )
 
         try:
-            response = await self.client.messages.create(
-                model=self.settings.CLAUDE_MODEL,
-                max_tokens=3000,
-                tools=[_TOOL_SCHEMA],
-                tool_choice={"type": "tool", "name": "reconcile_medications"},
-                messages=[{"role": "user", "content": prompt}],
+            import json
+            prompt_with_schema = f"""{prompt}
+
+Please output ONLY valid JSON matching the following schema:
+{json.dumps(_TOOL_SCHEMA['input_schema'])}"""
+            response_text = await self.client.generate_content(
+                prompt=prompt_with_schema,
+                model_type="text",
             )
         except Exception as exc:
-            logger.error("MedicationReconciliationTool API error", error=str(exc))
-            return self._empty_result(task, f"Claude API error: {exc}")
+            logger.error(f"{self.name} API error", error=str(exc))
+            return self._empty_result(task, f"Gemini API error: {exc}")
 
-        raw = self._extract_tool_use(response, "reconcile_medications") or {}
-        tokens = self._count_tokens(response)
+        raw = self._parse_json_response(response_text) or {}
+        tokens = self._count_tokens(response_text)
 
         reconciled = raw.get("reconciliation", [])
         high_risk = raw.get("high_risk_changes", [])
@@ -128,7 +130,7 @@ class MedicationReconciliationTool(BaseTool):
                     med.change_reason = rec.get("change_reason")
 
         duration_ms = (time.time() - start) * 1000
-        state.add_tokens(response.usage.input_tokens, response.usage.output_tokens)
+        state.add_tokens(len(prompt) // 4, tokens)
 
         return self._ok_result(
             task=task,

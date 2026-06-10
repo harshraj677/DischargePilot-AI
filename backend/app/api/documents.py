@@ -78,11 +78,15 @@ async def retry_processing(
     if not doc:
         raise DocumentNotFoundException(document_id)
 
-    if doc.status not in (DocumentStatus.FAILED.value, DocumentStatus.EMPTY.value):
+    if doc.status not in (
+        DocumentStatus.FAILED.value,
+        DocumentStatus.EMPTY.value,
+        DocumentStatus.REVIEW_REQUIRED.value,
+    ):
         from app.utils.exceptions import DischargePilotException
         raise DischargePilotException(
             error="Retry not applicable",
-            detail=f"Document status is '{doc.status}'. Only FAILED or EMPTY documents can be retried.",
+            detail=f"Document status is '{doc.status}'. Only FAILED, EMPTY, or REVIEW_REQUIRED documents can be retried.",
             code="RETRY_NOT_APPLICABLE",
             status_code=409,
         )

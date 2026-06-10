@@ -2,11 +2,16 @@
 Document Processing Service — orchestrates the full pipeline:
 Extract → Clean → Classify → Extract Metadata → Chunk → Save
 """
+import asyncio
 import time
 from datetime import datetime
 from typing import Optional
 
 from sqlalchemy.orm import Session
+
+import fitz
+from app.ocr.integration import OCREnhancedExtractor
+from app.processing.pdf_extractor import ExtractionResult
 
 from app.config import settings
 from app.db.repositories.document_repo import DocumentRepository
@@ -62,6 +67,33 @@ async def process_document(document_id: str, db: Session) -> None:
             document_type=DocumentType(doc.document_type),
         )
         pipeline_logs.extend(extraction.processing_logs)
+
+        # ── Step 1b: Claude Vision OCR fallback for scanned/image pages ──
+        # Native extraction returns empty text for scanned/image-only PDFs —
+        # that is NOT a failure. Run OCR on those pages instead of rejecting.
+        ocr_metadata: Optional[dict] = None
+        if settings.OCR_ENABLED and extraction.empty_page_count > 0:
+            extraction, ocr_metadata = await _run_ocr_fallback(
+                doc=doc,
+                extraction=extraction,
+                document_id=document_id,
+                pipeline_logs=pipeline_logs,
+            )
+
+        # If, even after OCR, there's still no usable text, don't fail the
+        # document outright — flag it for manual review instead.
+        usable_text = clean_document_text(extraction.full_text)
+        if len(usable_text.strip()) < settings.MIN_PAGE_TEXT_LENGTH * 2:
+            ocr_attempted = bool(ocr_metadata and ocr_metadata.get("ocr_enabled"))
+            reason = (
+                "Scanned/image-only document — Vision OCR could not extract usable text. "
+                "Flagged for manual review."
+                if ocr_attempted
+                else "Document contains no extractable text and is not a scanned PDF eligible for OCR. "
+                "Flagged for manual review."
+            )
+            _handle_review_required(repo, document_id, doc.file_name, reason, pipeline_logs)
+            return
 
         # ── Step 2: Text Cleaning ─────────────────────────────────────────
         pipeline_logs.append(_make_log("STEP_2", "Cleaning extracted text"))
@@ -211,3 +243,109 @@ def _handle_failure(
         error=error,
         critical=is_critical,
     )
+
+
+def _handle_review_required(
+    repo: DocumentRepository,
+    document_id: str,
+    filename: str,
+    reason: str,
+    logs: list,
+) -> None:
+    """
+    Flag a document for manual review instead of failing it outright.
+    The document and any partial extraction results are preserved.
+    """
+    logs.append(
+        _make_log("REVIEW_REQUIRED", f"Flagged for manual review: {reason}", {"reason": reason})
+    )
+    repo.set_review_required(document_id, reason)
+    logger.warning(
+        "Document flagged for manual review",
+        document_id=document_id,
+        filename=filename,
+        reason=reason,
+    )
+
+
+async def _run_ocr_fallback(
+    doc,
+    extraction: ExtractionResult,
+    document_id: str,
+    pipeline_logs: list,
+) -> tuple[ExtractionResult, dict]:
+    """
+    Run Vision OCR (Claude by default, see settings.OCR_PRIMARY_PROVIDER) over
+    pages with no native text and merge the results into the extraction. Never
+    raises — on any failure, the original native-text extraction is returned
+    unchanged so the pipeline can continue (and, if needed, fall through to
+    manual review).
+    """
+    pipeline_logs.append(
+        _make_log(
+            "OCR_FALLBACK_TRIGGERED",
+            f"{extraction.empty_page_count} of {extraction.page_count} page(s) have no "
+            f"extractable native text — running Vision OCR ({settings.OCR_PRIMARY_PROVIDER})",
+            {"empty_pages": extraction.empty_page_count, "page_count": extraction.page_count},
+        )
+    )
+    logger.info(
+        "Triggering Vision OCR fallback",
+        document_id=document_id,
+        provider=settings.OCR_PRIMARY_PROVIDER,
+        empty_pages=extraction.empty_page_count,
+        page_count=extraction.page_count,
+    )
+
+    pdf_doc = None
+    try:
+        pdf_doc = fitz.open(doc.file_path)
+        extractor = OCREnhancedExtractor(
+            enable_ocr=True,
+            primary_ocr_provider=settings.OCR_PRIMARY_PROVIDER or "claude",
+        )
+        # enhance_extraction_result is sync and blocks on Gemini Vision calls —
+        # run it in a worker thread so it never blocks the event loop (and so
+        # its internal asyncio.run_until_complete has no running loop to fight).
+        enhanced_result, ocr_metadata = await asyncio.to_thread(
+            extractor.enhance_extraction_result,
+            original_result=extraction,
+            doc=pdf_doc,
+            document_id=document_id,
+            document_name=doc.file_name,
+        )
+
+        pipeline_logs.append(
+            _make_log(
+                "OCR_FALLBACK_COMPLETE",
+                f"Vision OCR enhanced {ocr_metadata.get('pages_enhanced_with_ocr', 0)} page(s)",
+                ocr_metadata,
+            )
+        )
+        logger.info(
+            "OCR fallback complete",
+            document_id=document_id,
+            pages_enhanced=ocr_metadata.get("pages_enhanced_with_ocr", 0),
+        )
+        return enhanced_result, ocr_metadata
+
+    except Exception as exc:
+        pipeline_logs.append(
+            _make_log(
+                "OCR_FALLBACK_FAILED",
+                f"Vision OCR fallback failed: {exc}",
+                {"error": str(exc)},
+                is_error=True,
+            )
+        )
+        logger.error(
+            "OCR fallback failed — continuing with native extraction",
+            document_id=document_id,
+            error=str(exc),
+            exc_info=True,
+        )
+        return extraction, {"ocr_enabled": True, "ocr_failed": True, "error": str(exc)}
+
+    finally:
+        if pdf_doc is not None:
+            pdf_doc.close()

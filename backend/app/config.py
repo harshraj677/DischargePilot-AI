@@ -11,6 +11,7 @@ class Settings(BaseSettings):
         env_file=str(BASE_DIR / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # Application
@@ -26,17 +27,27 @@ class Settings(BaseSettings):
     # File Storage
     UPLOAD_DIR: Path = BASE_DIR / "uploads"
     MAX_FILE_SIZE_MB: int = 50
-    ALLOWED_EXTENSIONS: List[str] = [".pdf"]
+    ALLOWED_EXTENSIONS: List[str] = [".pdf", ".jpg", ".jpeg", ".png", ".webp"]
 
-    # Claude API
+    # Google Gemini API
+    GEMINI_API_KEY: str = ""
+    GEMINI_VISION_MODEL: str = "gemini-2.5-pro"
+    GEMINI_TEXT_MODEL: str = "gemini-2.5-pro"
+    GEMINI_CLASSIFICATION_THRESHOLD: float = 0.60
+
+    # Anthropic Claude API (primary Vision OCR provider)
     ANTHROPIC_API_KEY: str = ""
-    CLAUDE_MODEL: str = "claude-sonnet-4-6"
-    CLAUDE_CLASSIFICATION_THRESHOLD: float = 0.60
+    ANTHROPIC_VISION_MODEL: str = "claude-opus-4-8"
 
     # Processing
     MAX_EXTRACTION_RETRIES: int = 3
     EXTRACTION_TIMEOUT_SECONDS: int = 60
     MIN_PAGE_TEXT_LENGTH: int = 10
+
+    # OCR (Claude Vision is the primary provider for scanned/image-only PDFs,
+    # with Gemini/EasyOCR/Tesseract as fallbacks)
+    OCR_ENABLED: bool = True
+    OCR_PRIMARY_PROVIDER: str = "claude"
 
     # Agent
     AGENT_MAX_ITERATIONS: int = 15

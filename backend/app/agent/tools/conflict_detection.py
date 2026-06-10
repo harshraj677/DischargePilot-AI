@@ -120,19 +120,21 @@ class ConflictDetectionTool(BaseTool):
         )
 
         try:
-            response = await self.client.messages.create(
-                model=self.settings.CLAUDE_MODEL,
-                max_tokens=3000,
-                tools=[_TOOL_SCHEMA],
-                tool_choice={"type": "tool", "name": "detect_conflicts"},
-                messages=[{"role": "user", "content": prompt}],
+            import json
+            prompt_with_schema = f"""{prompt}
+
+Please output ONLY valid JSON matching the following schema:
+{json.dumps(_TOOL_SCHEMA['input_schema'])}"""
+            response_text = await self.client.generate_content(
+                prompt=prompt_with_schema,
+                model_type="text",
             )
         except Exception as exc:
-            logger.error("ConflictDetectionTool API error", error=str(exc))
-            return self._empty_result(task, f"Claude API error: {exc}")
+            logger.error(f"{self.name} API error", error=str(exc))
+            return self._empty_result(task, f"Gemini API error: {exc}")
 
-        raw = self._extract_tool_use(response, "detect_conflicts") or {}
-        tokens = self._count_tokens(response)
+        raw = self._parse_json_response(response_text) or {}
+        tokens = self._count_tokens(response_text)
         conflicts_found = 0
         critical_count = 0
 
@@ -161,7 +163,7 @@ class ConflictDetectionTool(BaseTool):
             state.escalation_required = True
 
         duration_ms = (time.time() - start) * 1000
-        state.add_tokens(response.usage.input_tokens, response.usage.output_tokens)
+        state.add_tokens(len(prompt) // 4, tokens)
 
         return self._ok_result(
             task=task,

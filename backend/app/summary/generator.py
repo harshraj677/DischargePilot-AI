@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from anthropic import AsyncAnthropic
+from app.gemini.client import GeminiClient
 
 from app.config import Settings
 from app.knowledge.repository import KnowledgeRepository
@@ -31,7 +31,7 @@ class DischargeSummaryGenerator:
     discharge condition) call Claude with ONLY KB facts injected as context.
     """
 
-    def __init__(self, client: AsyncAnthropic, settings: Settings) -> None:
+    def __init__(self, client: GeminiClient, settings: Settings) -> None:
         self._client = client
         self._model = settings.CLAUDE_MODEL
 
@@ -262,12 +262,12 @@ class DischargeSummaryGenerator:
         )
 
         try:
-            response = await self._client.messages.create(
-                model=self._model,
-                max_tokens=_CLAUDE_MAX_TOKENS,
-                messages=[{"role": "user", "content": prompt}],
+            narrative = await self._client.generate_content(
+                prompt=prompt,
+                model_type="text",
+                config={"max_output_tokens": _CLAUDE_MAX_TOKENS}
             )
-            narrative = response.content[0].text.strip()
+            narrative = narrative.strip()
             return SummarySection(
                 name="hospital_course",
                 content=narrative,
@@ -300,12 +300,12 @@ class DischargeSummaryGenerator:
         )
 
         try:
-            response = await self._client.messages.create(
-                model=self._model,
-                max_tokens=300,
-                messages=[{"role": "user", "content": prompt}],
+            text = await self._client.generate_content(
+                prompt=prompt,
+                model_type="text",
+                config={"max_output_tokens": 300}
             )
-            text = response.content[0].text.strip()
+            text = text.strip()
             return SummarySection(
                 name="discharge_condition",
                 content=text,
@@ -340,12 +340,12 @@ class DischargeSummaryGenerator:
         )
 
         try:
-            response = await self._client.messages.create(
-                model=self._model,
-                max_tokens=800,
-                messages=[{"role": "user", "content": prompt}],
+            text = await self._client.generate_content(
+                prompt=prompt,
+                model_type="text",
+                config={"max_output_tokens": 800}
             )
-            text = response.content[0].text.strip()
+            text = text.strip()
             return SummarySection(
                 name="medication_changes",
                 content=text,

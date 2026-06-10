@@ -64,6 +64,14 @@ class DocumentRepository:
             doc.updated_at = datetime.utcnow()
             self.db.commit()
 
+    def set_review_required(self, document_id: str, reason: str) -> None:
+        doc = self.db.get(Document, document_id)
+        if doc:
+            doc.status = DocumentStatus.REVIEW_REQUIRED.value
+            doc.processing_error = reason
+            doc.updated_at = datetime.utcnow()
+            self.db.commit()
+
     def save_extraction_results(
         self,
         document_id: str,

@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  FileText, CheckCircle2, AlertCircle, Loader2, X, RefreshCw, Eye
+  FileText, CheckCircle2, AlertCircle, Loader2, X, RefreshCw, Eye, FileSearch
 } from "lucide-react";
 import type { DocumentResponse, UploadingFile } from "@/lib/types";
 import { DOCUMENT_TYPE_LABELS, STATUS_LABELS } from "@/lib/types";
@@ -113,6 +113,11 @@ export function DocumentCard({ doc, onDelete, onRetry, onView }: DocumentCardPro
       color: "text-amber-600",
       bg: "bg-amber-50 border-amber-200",
     },
+    REVIEW_REQUIRED: {
+      icon: <FileSearch className="h-4 w-4 text-amber-500" />,
+      color: "text-amber-700",
+      bg: "bg-amber-50 border-amber-200",
+    },
   };
 
   const cfg = statusConfig[doc.status] ?? statusConfig.UPLOADED;
@@ -150,10 +155,15 @@ export function DocumentCard({ doc, onDelete, onRetry, onView }: DocumentCardPro
         {doc.status === "FAILED" && doc.processing_error && (
           <p className="mt-1 text-xs text-red-600">{doc.processing_error}</p>
         )}
+        {doc.status === "REVIEW_REQUIRED" && (
+          <p className="mt-1 text-xs text-amber-700">
+            {doc.processing_error ?? "Scanned document detected — Gemini OCR ran but the result needs a clinician's review."}
+          </p>
+        )}
       </div>
 
       <div className="flex flex-shrink-0 items-center gap-1">
-        {doc.status === "PROCESSED" && onView && (
+        {(doc.status === "PROCESSED" || doc.status === "REVIEW_REQUIRED") && onView && (
           <button
             onClick={() => onView(doc.id)}
             aria-label="View document"
@@ -163,7 +173,7 @@ export function DocumentCard({ doc, onDelete, onRetry, onView }: DocumentCardPro
             <Eye className="h-4 w-4" />
           </button>
         )}
-        {(doc.status === "FAILED" || doc.status === "EMPTY") && onRetry && (
+        {(doc.status === "FAILED" || doc.status === "EMPTY" || doc.status === "REVIEW_REQUIRED") && onRetry && (
           <button
             onClick={() => onRetry(doc.id)}
             aria-label="Retry processing"

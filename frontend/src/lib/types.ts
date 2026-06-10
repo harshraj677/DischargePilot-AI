@@ -13,7 +13,8 @@ export type DocumentStatus =
   | "PROCESSING"
   | "PROCESSED"
   | "FAILED"
-  | "EMPTY";
+  | "EMPTY"
+  | "REVIEW_REQUIRED";
 
 export type ClassificationMethod =
   | "rule_based"
@@ -111,6 +112,13 @@ export interface ClinicalMetadata {
   facility_name?: string;
 }
 
+export interface OcrMetadata {
+  provider: string;
+  confidence: number;
+  requires_review: boolean;
+  extraction_method: string;
+}
+
 export interface PageChunk {
   page_number: number;
   text: string;
@@ -119,6 +127,7 @@ export interface PageChunk {
   is_empty: boolean;
   document_id: string;
   document_name: string;
+  ocr_metadata?: OcrMetadata | null;
 }
 
 export interface ProcessingLog {
@@ -201,6 +210,7 @@ export const STATUS_LABELS: Record<DocumentStatus, string> = {
   PROCESSED: "Processed",
   FAILED: "Failed",
   EMPTY: "Empty",
+  REVIEW_REQUIRED: "Needs Review",
 };
 
 // ── Agent Types ────────────────────────────────────────────────────────────────
@@ -235,7 +245,7 @@ export interface AgentRunDetail extends AgentRunSummary {
 
 export interface TraceStep {
   step: number;
-  tool_name: string;
+  selected_tool: string;
   tool_input?: Record<string, unknown>;
   tool_output?: Record<string, unknown>;
   reasoning?: string;

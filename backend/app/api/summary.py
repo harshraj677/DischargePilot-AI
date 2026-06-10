@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from anthropic import AsyncAnthropic
+from app.gemini.client import GeminiClient, get_gemini_client
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -29,7 +29,7 @@ _anthropic_client: Optional[AsyncAnthropic] = None
 def _get_client() -> AsyncAnthropic:
     global _anthropic_client
     if _anthropic_client is None:
-        _anthropic_client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        _anthropic_client = get_gemini_client()
     return _anthropic_client
 
 

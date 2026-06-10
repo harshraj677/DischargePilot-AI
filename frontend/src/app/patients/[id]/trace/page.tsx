@@ -36,7 +36,8 @@ const TOOL_CATEGORIES: Record<string, { color: string; bgColor: string; label: s
   default: { color: "text-slate-700", bgColor: "bg-slate-100", label: "General", icon: <Zap className="h-3.5 w-3.5" /> },
 };
 
-function getCategory(toolName: string) {
+function getCategory(toolName: string | undefined) {
+  if (!toolName) return TOOL_CATEGORIES.default;
   const lower = toolName.toLowerCase();
   if (lower.includes("diagnos")) return TOOL_CATEGORIES.diagnosis;
   if (lower.includes("medic") || lower.includes("pharma")) return TOOL_CATEGORIES.medication;
@@ -49,7 +50,7 @@ function getCategory(toolName: string) {
 }
 
 function StepCard({ step, expanded, onToggle }: { step: TraceStep; expanded: boolean; onToggle: () => void }) {
-  const cat = getCategory(step.tool_name);
+  const cat = getCategory(step.selected_tool);
 
   return (
     <div className={`rounded-xl border transition-colors ${expanded ? "border-slate-300 bg-white shadow-sm" : "border-slate-100 bg-white hover:border-slate-200"}`}>
@@ -67,7 +68,7 @@ function StepCard({ step, expanded, onToggle }: { step: TraceStep; expanded: boo
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-semibold text-slate-900">{step.tool_name}</p>
+            <p className="text-sm font-semibold text-slate-900">{step.selected_tool}</p>
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${cat.bgColor} ${cat.color}`}>
               {cat.label}
             </span>
@@ -192,10 +193,10 @@ export default function TracePage() {
     return trace.filter((step) => {
       const matchesSearch =
         !searchQuery ||
-        step.tool_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (step.selected_tool ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         (step.reasoning ?? "").toLowerCase().includes(searchQuery.toLowerCase());
 
-      const cat = getCategory(step.tool_name);
+      const cat = getCategory(step.selected_tool);
       const matchesCategory = categoryFilter === "all" || cat.label.toLowerCase() === categoryFilter;
 
       return matchesSearch && matchesCategory;
@@ -204,7 +205,7 @@ export default function TracePage() {
 
   const categories = useMemo(() => {
     const seen = new Set<string>();
-    trace.forEach((step) => seen.add(getCategory(step.tool_name).label.toLowerCase()));
+    trace.forEach((step) => seen.add(getCategory(step.selected_tool).label.toLowerCase()));
     return Array.from(seen);
   }, [trace]);
 

@@ -16,7 +16,7 @@ from app.utils.exceptions import (
     InvalidFileTypeException,
     FileTooLargeException,
 )
-from app.utils.file_utils import validate_pdf_upload, save_upload_file
+from app.utils.file_utils import validate_file_upload, save_upload_file
 from app.utils.logging import get_logger, AuditLogger
 
 logger = get_logger(__name__)
@@ -41,7 +41,7 @@ async def handle_upload(
         raise PatientNotFoundException(patient_id)
 
     file_size = len(file_bytes)
-    validate_pdf_upload(filename, file_size)
+    validate_file_upload(filename, file_size)
 
     # Store file
     file_path, actual_size = await save_upload_file(file_bytes, patient_id, filename)

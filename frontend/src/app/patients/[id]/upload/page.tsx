@@ -102,7 +102,7 @@ export default function UploadPage() {
         </span>
       </div>
 
-      <h1 className="text-xl font-700 text-slate-900">Upload Clinical Documents</h1>
+      <h1 className="text-xl font-700 text-slate-900">Upload Clinical Documents (PDF / Image)</h1>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Upload Panel */}

@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from anthropic import AsyncAnthropic
+from app.gemini.client import GeminiClient, get_gemini_client
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -39,7 +39,7 @@ class LearningService:
 
     def __init__(self, db: Session, client: Optional[AsyncAnthropic] = None) -> None:
         self._db = db
-        self._client = client or AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        self._client = client or get_gemini_client()
         self._reward_fn = RewardFunction()
         self._strategy_engine = PromptStrategyEngine(db)
         self._memory = CorrectionMemory(db)

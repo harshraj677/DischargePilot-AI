@@ -11,7 +11,7 @@ from app.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
-def validate_pdf_upload(filename: str, file_size: int) -> None:
+def validate_file_upload(filename: str, file_size: int) -> None:
     ext = Path(filename).suffix.lower()
     if ext not in settings.ALLOWED_EXTENSIONS:
         raise InvalidFileTypeException(filename, settings.ALLOWED_EXTENSIONS)
@@ -29,7 +29,8 @@ def generate_stored_filename(original_filename: str) -> str:
     stem = Path(original_filename).stem
     safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in stem)[:60]
     unique_id = uuid.uuid4().hex[:8]
-    return f"{safe_stem}_{unique_id}.pdf"
+    ext = Path(original_filename).suffix.lower()
+    return f"{safe_stem}_{unique_id}{ext}"
 
 
 async def save_upload_file(file_bytes: bytes, patient_id: str, original_filename: str) -> Tuple[str, int]:

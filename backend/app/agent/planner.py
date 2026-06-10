@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from anthropic import AsyncAnthropic
+from app.gemini.client import GeminiClient
 
 from app.agent.models import AgentState, AgentTask
 from app.agent.prompts import AGENT_SYSTEM_PROMPT, REPLANNING_PROMPT
@@ -22,7 +22,7 @@ class AgentPlanner:
     - Replanning uses Claude when new findings require plan adjustments
     """
 
-    def __init__(self, client: AsyncAnthropic, settings: Settings) -> None:
+    def __init__(self, client: GeminiClient, settings: Settings) -> None:
         self.client = client
         self.settings = settings
 
@@ -141,21 +141,18 @@ class AgentPlanner:
         )
 
         try:
-            response = await self.client.messages.create(
-                model=self.settings.CLAUDE_MODEL,
-                max_tokens=1500,
-                system=AGENT_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
+            response_text = await self.client.generate_content(
+                prompt=f"{AGENT_SYSTEM_PROMPT}\n\n{prompt}",
+                model_type="text"
             )
-            raw_text = response.content[0].text if response.content else "{}"
+            raw_text = response_text.strip()
             # Strip markdown code fences if present
-            raw_text = raw_text.strip()
             if raw_text.startswith("```"):
                 raw_text = "\n".join(raw_text.split("\n")[1:])
                 raw_text = raw_text.rsplit("```", 1)[0]
             plan_data = json.loads(raw_text)
         except Exception as exc:
-            logger.warning("Replanning Claude call failed, using heuristics", error=str(exc))
+            logger.warning("Replanning Gemini call failed, using heuristics", error=str(exc))
             plan_data = {"needs_replan": False, "new_tasks": []}
 
         if not plan_data.get("needs_replan", False):

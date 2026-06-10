@@ -76,20 +76,23 @@ class DiagnosisTool(BaseTool):
         prompt = DIAGNOSIS_EXTRACTION_PROMPT.format(document_text=combined)
 
         try:
-            response = await self.client.messages.create(
-                model=self.settings.CLAUDE_MODEL,
-                max_tokens=4096,
-                system=EXTRACTION_SYSTEM_PROMPT,
-                tools=[_TOOL_SCHEMA],
-                tool_choice={"type": "tool", "name": "extract_diagnoses"},
-                messages=[{"role": "user", "content": prompt}],
+            import json
+            prompt_with_schema = f"""{EXTRACTION_SYSTEM_PROMPT}
+
+{prompt}
+
+Please output ONLY valid JSON matching the following schema:
+{json.dumps(_TOOL_SCHEMA['input_schema'])}"""
+            response_text = await self.client.generate_content(
+                prompt=prompt_with_schema,
+                model_type="text",
             )
         except Exception as exc:
-            logger.error("DiagnosisTool API error", error=str(exc))
-            return self._empty_result(task, f"Claude API error: {exc}")
+            logger.error(f"{self.name} API error", error=str(exc))
+            return self._empty_result(task, f"Gemini API error: {exc}")
 
-        raw = self._extract_tool_use(response, "extract_diagnoses") or {}
-        tokens = self._count_tokens(response)
+        raw = self._parse_json_response(response_text) or {}
+        tokens = self._count_tokens(response_text)
         facts_added = 0
 
         # Use first document as default provenance source
@@ -150,10 +153,7 @@ class DiagnosisTool(BaseTool):
         dx_count = len(raw.get("diagnoses", []))
         principal_count = sum(1 for d in raw.get("diagnoses", []) if d.get("is_principal"))
 
-        state.add_tokens(
-            response.usage.input_tokens,
-            response.usage.output_tokens,
-        )
+        state.add_tokens(len(prompt) // 4, tokens)
 
         return self._ok_result(
             task=task,

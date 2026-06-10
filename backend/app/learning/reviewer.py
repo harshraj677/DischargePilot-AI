@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from anthropic import AsyncAnthropic
+from app.gemini.client import GeminiClient, get_gemini_client
 
 from app.config import settings
 from app.learning.edit_policy import EditPolicy
@@ -76,7 +76,7 @@ class DoctorReviewerAgent:
     """
 
     def __init__(self, client: Optional[AsyncAnthropic] = None) -> None:
-        self._client = client or AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        self._client = client or get_gemini_client()
         self._edit_policy = EditPolicy()
 
     async def review_summary(
@@ -142,26 +142,31 @@ Focus on:
         edit_rationale: List[str] = [r.edit_type for r in all_edit_records]
 
         try:
-            response = await self._client.messages.create(
-                model=settings.CLAUDE_MODEL,
-                max_tokens=2048,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_message}],
-                tools=[REVIEW_TOOL],
-                tool_choice={"type": "auto"},
+            import json
+            prompt_with_schema = f"{SYSTEM_PROMPT}\\n\\n{user_message}\\n\\nPlease output ONLY valid JSON matching the following schema:\\n{json.dumps(REVIEW_TOOL['input_schema'])}"
+            response_text = await self._client.generate_content(
+                prompt=prompt_with_schema,
+                model_type="text",
+                config={"max_output_tokens": 2048}
             )
 
-            # Extract tool use result
-            for block in response.content:
-                if block.type == "tool_use" and block.name == "submit_review":
-                    tool_input: Dict[str, Any] = block.input
-                    ai_edits = tool_input.get("edited_sections", {})
-                    if ai_edits:
-                        edited_sections.update(ai_edits)
-                    review_notes = tool_input.get("review_notes", review_notes)
-                    ai_rationale = tool_input.get("edit_rationale", [])
-                    edit_rationale.extend(ai_rationale)
-                    break
+            # Parse JSON
+            raw_text = response_text.strip()
+            if raw_text.startswith("```json"):
+                raw_text = raw_text[7:]
+            elif raw_text.startswith("```"):
+                raw_text = raw_text[3:]
+            if raw_text.endswith("```"):
+                raw_text = raw_text[:-3]
+            raw_text = raw_text.strip()
+            
+            tool_input = json.loads(raw_text)
+            ai_edits = tool_input.get("edited_sections", {})
+            if ai_edits:
+                edited_sections.update(ai_edits)
+            review_notes = tool_input.get("review_notes", review_notes)
+            ai_rationale = tool_input.get("edit_rationale", [])
+            edit_rationale.extend(ai_rationale)
 
         except Exception as exc:
             logger.warning(

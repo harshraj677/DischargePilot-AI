@@ -4,7 +4,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
-from anthropic import AsyncAnthropic
+from app.gemini.client import GeminiClient
 from sqlalchemy.orm import Session
 
 from app.agent.models import AgentState, AgentTask, ToolResult
@@ -33,7 +33,7 @@ class BaseTool(ABC):
     name: str = "base_tool"
     description: str = "Base tool"
 
-    def __init__(self, client: AsyncAnthropic, settings: Settings) -> None:
+    def __init__(self, client: GeminiClient, settings: Settings) -> None:
         self.client = client
         self.settings = settings
 
@@ -117,18 +117,27 @@ class BaseTool(ABC):
             evidence=evidence[:500],
         )
 
-    def _extract_tool_use(self, response: Any, tool_name: str) -> Optional[Dict[str, Any]]:
-        """Parse Claude's tool_use response block."""
-        for block in response.content:
-            if block.type == "tool_use" and block.name == tool_name:
-                return block.input
-        return None
-
-    def _count_tokens(self, response: Any) -> int:
+    def _parse_json_response(self, text: str) -> Optional[Dict[str, Any]]:
+        import json
+        text = text.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        elif text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
         try:
-            return response.usage.input_tokens + response.usage.output_tokens
-        except Exception:
-            return 0
+            return json.loads(text.strip())
+        except json.JSONDecodeError:
+            try:
+                start = text.find('{')
+                end = text.rfind('}') + 1
+                return json.loads(text[start:end])
+            except:
+                return None
+
+    def _count_tokens(self, text: str) -> int:
+        return len(text) // 4  # Rough estimate for Gemini
 
     def _empty_result(self, task: AgentTask, reason: str) -> ToolResult:
         return ToolResult(

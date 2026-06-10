@@ -14,6 +14,7 @@ class PageChunk(BaseModel):
     document_id: str = ""
     document_name: str = ""
     document_type: DocumentType = DocumentType.UNKNOWN
+    ocr_metadata: Optional[Dict[str, Any]] = None
 
 
 class EvidenceRef(BaseModel):

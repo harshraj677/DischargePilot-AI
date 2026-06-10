@@ -131,31 +131,24 @@ def classify_by_rules(text: str) -> ClassificationResult:
 
 async def classify_by_llm(text: str, filename: str) -> ClassificationResult:
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        from app.gemini.client import GeminiClient, get_gemini_client
+        client = get_gemini_client()
 
         sample = text[:3000]
         valid_types = [t.value for t in DocumentType if t != DocumentType.UNKNOWN]
 
-        message = client.messages.create(
-            model=settings.CLAUDE_MODEL,
-            max_tokens=256,
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        f"Classify this clinical document. Filename: '{filename}'\n\n"
-                        f"First 3000 characters:\n{sample}\n\n"
-                        f"Return JSON only:\n"
-                        f'{{"document_type": "<one of: {", ".join(valid_types)}>", '
-                        f'"confidence": <0.0-1.0>, "reasoning": "<one sentence>"}}'
-                    ),
-                }
-            ],
+        prompt = (
+            f"Classify this clinical document. Filename: '{filename}'\n\n"
+            f"First 3000 characters:\n{sample}\n\n"
+            f"Return JSON only:\n"
+            f'{{"document_type": "<one of: {", ".join(valid_types)}>", '
+            f'"confidence": <0.0-1.0>, "reasoning": "<one sentence>"}}'
         )
+        
+        raw_text = await client.generate_content(prompt=prompt, model_type="text")
 
         import json
-        raw = message.content[0].text.strip()
+        raw = raw_text.strip()
         raw = re.sub(r"```json|```", "", raw).strip()
         data = json.loads(raw)
 
@@ -206,7 +199,7 @@ async def classify_document(
     )
 
     # Stage 2: LLM fallback if confidence is low
-    if rule_result.confidence < settings.CLAUDE_CLASSIFICATION_THRESHOLD and settings.ANTHROPIC_API_KEY:
+    if rule_result.confidence < settings.GEMINI_CLASSIFICATION_THRESHOLD and settings.GEMINI_API_KEY:
         logger.info("Low confidence — falling back to LLM classification", confidence=rule_result.confidence)
         llm_result = await classify_by_llm(text, filename)
         if llm_result.confidence >= rule_result.confidence:

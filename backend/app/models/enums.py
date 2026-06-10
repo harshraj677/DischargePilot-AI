@@ -16,6 +16,7 @@ class DocumentStatus(str, Enum):
     PROCESSED = "PROCESSED"
     FAILED = "FAILED"
     EMPTY = "EMPTY"
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
 
 
 class ClassificationMethod(str, Enum):
