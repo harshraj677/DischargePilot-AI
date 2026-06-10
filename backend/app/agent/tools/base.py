@@ -4,15 +4,17 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.gemini.client import GeminiClient
+from app.claude.agent_client import ClaudeAgentClient
 from sqlalchemy.orm import Session
 
 from app.agent.models import AgentState, AgentTask, ToolResult
 from app.config import Settings
 from app.db.repositories.document_repo import DocumentRepository
+from app.knowledge.extraction_engine import ExtractionResult, get_extraction_engine
 from app.knowledge.models import EvidencedFact
 from app.knowledge.repository import KnowledgeRepository
 from app.models.document import PageChunk
+from app.utils.json_parsing import parse_json_response
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -33,7 +35,7 @@ class BaseTool(ABC):
     name: str = "base_tool"
     description: str = "Base tool"
 
-    def __init__(self, client: GeminiClient, settings: Settings) -> None:
+    def __init__(self, client: ClaudeAgentClient, settings: Settings) -> None:
         self.client = client
         self.settings = settings
 
@@ -99,6 +101,26 @@ class BaseTool(ABC):
                 results.append((doc_id, name, dtype, text))
         return results
 
+    def _combined_text_block(self, doc_list: List[Tuple[str, str, str, str]]) -> str:
+        """Join (doc_id, doc_name, doc_type, text) tuples into one labeled text block."""
+        sections = [f"=== Document: {name} (type: {dtype}) ===\n{text}" for _, name, dtype, text in doc_list]
+        return "\n\n".join(sections)
+
+    async def _get_consolidated_extraction(
+        self,
+        doc_list: List[Tuple[str, str, str, str]],
+    ) -> ExtractionResult:
+        """
+        Run (or reuse the cached result of) the single Clinical Knowledge
+        Extraction Engine call for this document set (STEP 3 / STEP 5).
+
+        May raise ClaudeUnavailableError — callers should catch it the same
+        way they handle their own direct generate_content() calls.
+        """
+        engine = get_extraction_engine()
+        combined = self._combined_text_block(doc_list)
+        return await engine.extract(combined, self.client)
+
     def _make_evidenced_fact(
         self,
         value: str,
@@ -118,26 +140,21 @@ class BaseTool(ABC):
         )
 
     def _parse_json_response(self, text: str) -> Optional[Dict[str, Any]]:
-        import json
-        text = text.strip()
-        if text.startswith("```json"):
-            text = text[7:]
-        elif text.startswith("```"):
-            text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        try:
-            return json.loads(text.strip())
-        except json.JSONDecodeError:
-            try:
-                start = text.find('{')
-                end = text.rfind('}') + 1
-                return json.loads(text[start:end])
-            except:
-                return None
+        return parse_json_response(text)
 
     def _count_tokens(self, text: str) -> int:
-        return len(text) // 4  # Rough estimate for Gemini
+        return len(text) // 4  # Rough estimate
+
+    def _claude_unavailable_result(self, task: AgentTask, state: AgentState, exc: Exception) -> ToolResult:
+        """
+        Claude was unavailable after all retries. Flag the run for manual
+        review (so a human catches the gap) without crashing or stopping
+        the agent loop.
+        """
+        reason = f"{self.name}: Claude unavailable, manual review required ({exc})"
+        if reason not in state.escalation_reasons:
+            state.escalation_reasons.append(reason)
+        return self._empty_result(task, f"Claude unavailable: {exc}")
 
     def _empty_result(self, task: AgentTask, reason: str) -> ToolResult:
         return ToolResult(

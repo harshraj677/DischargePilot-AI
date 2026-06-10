@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { FlagSeverity, SafetyStatus, SummaryStatus, AgentRunStatus, DocumentStatus } from "@/lib/types";
+import type { FlagSeverity, SafetyStatus, SummaryStatus, AgentRunStatus, DocumentStatus, ClaudeStatus } from "@/lib/types";
 
 type BadgeVariant =
   | "critical"
@@ -136,4 +136,22 @@ export function DocumentStatusBadge({ status }: { status: DocumentStatus }) {
     REVIEW_REQUIRED: "warning",
   };
   return <Badge variant={map[status]}>{status}</Badge>;
+}
+
+export function ClaudeStatusBadge({ status }: { status: ClaudeStatus["status"] }) {
+  const map: Record<ClaudeStatus["status"], BadgeVariant> = {
+    connected: "success",
+    degraded: "warning",
+    not_configured: "critical",
+  };
+  const labels: Record<ClaudeStatus["status"], string> = {
+    connected: "Connected",
+    degraded: "Degraded",
+    not_configured: "Not Configured",
+  };
+  return (
+    <Badge variant={map[status]} dot>
+      {labels[status]}
+    </Badge>
+  );
 }

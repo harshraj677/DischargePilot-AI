@@ -4,7 +4,7 @@ import json
 import uuid
 from datetime import datetime
 
-from app.gemini.client import GeminiClient, get_gemini_client
+from app.claude.agent_client import ClaudeAgentClient, get_claude_agent_client
 from sqlalchemy.orm import Session
 
 from app.agent.loop import AgentLoop
@@ -18,15 +18,15 @@ from app.utils.logging import get_logger, AuditLogger
 logger = get_logger(__name__)
 audit = AuditLogger(module="agent_service")
 
-# Singleton Anthropic client shared across all agent runs
-_anthropic_client: GeminiClient | None = None
+# Singleton Claude client shared across all agent runs
+_claude_client: ClaudeAgentClient | None = None
 
 
-def _get_client() -> AsyncAnthropic:
-    global _anthropic_client
-    if _anthropic_client is None:
-        _anthropic_client = get_gemini_client()
-    return _anthropic_client
+def _get_client() -> ClaudeAgentClient:
+    global _claude_client
+    if _claude_client is None:
+        _claude_client = get_claude_agent_client()
+    return _claude_client
 
 
 class AgentService:

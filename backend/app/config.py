@@ -29,15 +29,15 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE_MB: int = 50
     ALLOWED_EXTENSIONS: List[str] = [".pdf", ".jpg", ".jpeg", ".png", ".webp"]
 
-    # Google Gemini API
-    GEMINI_API_KEY: str = ""
-    GEMINI_VISION_MODEL: str = "gemini-2.5-pro"
-    GEMINI_TEXT_MODEL: str = "gemini-2.5-pro"
-    GEMINI_CLASSIFICATION_THRESHOLD: float = 0.60
-
-    # Anthropic Claude API (primary Vision OCR provider)
+    # Anthropic Claude API (single AI provider for the whole platform)
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_VISION_MODEL: str = "claude-opus-4-8"
+    ANTHROPIC_TEXT_MODEL: str = "claude-sonnet-4-6"
+    CLAUDE_MODEL: str = "claude-sonnet-4-6"
+    CLAUDE_MAX_RETRIES: int = 3
+    CLAUDE_RETRY_BASE_DELAY: float = 2.0
+    CLAUDE_RESPONSE_CACHE_ENABLED: bool = True
+    CLASSIFICATION_CONFIDENCE_THRESHOLD: float = 0.60
 
     # Processing
     MAX_EXTRACTION_RETRIES: int = 3
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     MIN_PAGE_TEXT_LENGTH: int = 10
 
     # OCR (Claude Vision is the primary provider for scanned/image-only PDFs,
-    # with Gemini/EasyOCR/Tesseract as fallbacks)
+    # with EasyOCR/Tesseract as fallbacks)
     OCR_ENABLED: bool = True
     OCR_PRIMARY_PROVIDER: str = "claude"
 

@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Optional
 
-from app.gemini.client import GeminiClient, get_gemini_client
+from app.claude.agent_client import ClaudeAgentClient
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -26,7 +26,7 @@ class SummaryService:
     Wraps DischargeSummaryGenerator, persisting the result in DischargeReport.
     """
 
-    def __init__(self, db: Session, client: GeminiClient, settings: Settings) -> None:
+    def __init__(self, db: Session, client: ClaudeAgentClient, settings: Settings) -> None:
         self._db = db
         self._generator = DischargeSummaryGenerator(client, settings)
 

@@ -304,7 +304,7 @@ async def _run_ocr_fallback(
             enable_ocr=True,
             primary_ocr_provider=settings.OCR_PRIMARY_PROVIDER or "claude",
         )
-        # enhance_extraction_result is sync and blocks on Gemini Vision calls —
+        # enhance_extraction_result is sync and blocks on Vision OCR calls —
         # run it in a worker thread so it never blocks the event loop (and so
         # its internal asyncio.run_until_complete has no running loop to fight).
         enhanced_result, ocr_metadata = await asyncio.to_thread(

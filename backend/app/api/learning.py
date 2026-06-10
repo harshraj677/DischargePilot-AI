@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from app.gemini.client import GeminiClient, get_gemini_client
+from app.claude.agent_client import ClaudeAgentClient, get_claude_agent_client
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -26,14 +26,14 @@ from app.utils.logging import get_logger
 logger = get_logger(__name__)
 router = APIRouter(prefix="/learning", tags=["Learning"])
 
-_anthropic_client: Optional[AsyncAnthropic] = None
+_claude_client: Optional[ClaudeAgentClient] = None
 
 
-def _get_client() -> AsyncAnthropic:
-    global _anthropic_client
-    if _anthropic_client is None:
-        _anthropic_client = get_gemini_client()
-    return _anthropic_client
+def _get_client() -> ClaudeAgentClient:
+    global _claude_client
+    if _claude_client is None:
+        _claude_client = get_claude_agent_client()
+    return _claude_client
 
 
 # ── Response Models ───────────────────────────────────────────────────────────

@@ -20,6 +20,7 @@ from app.ocr.models import (
 from app.ocr.providers.base import OCRProvider
 from app.claude.vision import ClaudeVisionService, ImageProcessingError, OCRPageExtraction
 from app.claude.config import ClaudeConfig
+from app.claude.usage import get_claude_usage_stats
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -84,6 +85,7 @@ class ClaudeVisionOCR(OCRProvider):
             )
 
             extraction, retry_count = self._call_claude_with_retry(img, page_number)
+            get_claude_usage_stats().record_request("ocr")
 
             duration_ms = (time.perf_counter() - start_time) * 1000
 
@@ -138,6 +140,7 @@ class ClaudeVisionOCR(OCRProvider):
 
         except Exception as e:
             duration_ms = (time.perf_counter() - start_time) * 1000
+            get_claude_usage_stats().record_error(str(e))
 
             self.logger.error(
                 "Claude Vision OCR failed after retries",

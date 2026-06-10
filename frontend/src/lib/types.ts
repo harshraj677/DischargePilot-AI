@@ -364,3 +364,34 @@ export interface LearningMetrics {
   best_strategy: string | null;
   sessions_by_date: Array<{ date: string; avg_reward: number; count: number }>;
 }
+
+// ── System / Claude status ──────────────────────────────────────────────────
+
+export interface ClaudeStatus {
+  provider: "claude";
+  status: "connected" | "degraded" | "not_configured";
+  configured: boolean;
+  text_model: string;
+  vision_model: string;
+  requests: {
+    total: number;
+    text: number;
+    vision: number;
+    ocr: number;
+    errors: number;
+    last_request_at: string | null;
+    last_error: string | null;
+    last_error_at: string | null;
+  };
+  cache: {
+    enabled: boolean;
+    hits: number;
+    misses: number;
+  };
+  ocr: {
+    enabled: boolean;
+    primary_provider: string;
+    status: "active" | "inactive";
+    requests: number;
+  };
+}

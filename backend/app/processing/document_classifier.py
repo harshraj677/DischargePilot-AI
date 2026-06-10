@@ -131,8 +131,8 @@ def classify_by_rules(text: str) -> ClassificationResult:
 
 async def classify_by_llm(text: str, filename: str) -> ClassificationResult:
     try:
-        from app.gemini.client import GeminiClient, get_gemini_client
-        client = get_gemini_client()
+        from app.claude.agent_client import get_claude_agent_client
+        client = get_claude_agent_client()
 
         sample = text[:3000]
         valid_types = [t.value for t in DocumentType if t != DocumentType.UNKNOWN]
@@ -199,7 +199,7 @@ async def classify_document(
     )
 
     # Stage 2: LLM fallback if confidence is low
-    if rule_result.confidence < settings.GEMINI_CLASSIFICATION_THRESHOLD and settings.GEMINI_API_KEY:
+    if rule_result.confidence < settings.CLASSIFICATION_CONFIDENCE_THRESHOLD and settings.ANTHROPIC_API_KEY:
         logger.info("Low confidence — falling back to LLM classification", confidence=rule_result.confidence)
         llm_result = await classify_by_llm(text, filename)
         if llm_result.confidence >= rule_result.confidence:

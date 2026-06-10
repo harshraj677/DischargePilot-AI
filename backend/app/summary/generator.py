@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from app.gemini.client import GeminiClient
+from app.claude.agent_client import ClaudeAgentClient
 
 from app.config import Settings
 from app.knowledge.repository import KnowledgeRepository
@@ -31,7 +31,7 @@ class DischargeSummaryGenerator:
     discharge condition) call Claude with ONLY KB facts injected as context.
     """
 
-    def __init__(self, client: GeminiClient, settings: Settings) -> None:
+    def __init__(self, client: ClaudeAgentClient, settings: Settings) -> None:
         self._client = client
         self._model = settings.CLAUDE_MODEL
 

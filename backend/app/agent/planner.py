@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from app.gemini.client import GeminiClient
+from app.claude.agent_client import ClaudeAgentClient, ClaudeUnavailableError
 
 from app.agent.models import AgentState, AgentTask
 from app.agent.prompts import AGENT_SYSTEM_PROMPT, REPLANNING_PROMPT
@@ -22,7 +22,7 @@ class AgentPlanner:
     - Replanning uses Claude when new findings require plan adjustments
     """
 
-    def __init__(self, client: GeminiClient, settings: Settings) -> None:
+    def __init__(self, client: ClaudeAgentClient, settings: Settings) -> None:
         self.client = client
         self.settings = settings
 
@@ -151,8 +151,14 @@ class AgentPlanner:
                 raw_text = "\n".join(raw_text.split("\n")[1:])
                 raw_text = raw_text.rsplit("```", 1)[0]
             plan_data = json.loads(raw_text)
+        except ClaudeUnavailableError as exc:
+            logger.warning("Replanning Claude call unavailable, using heuristics", error=str(exc))
+            reason = f"replanner: Claude unavailable, manual review required ({exc})"
+            if reason not in state.escalation_reasons:
+                state.escalation_reasons.append(reason)
+            plan_data = {"needs_replan": False, "new_tasks": []}
         except Exception as exc:
-            logger.warning("Replanning Gemini call failed, using heuristics", error=str(exc))
+            logger.warning("Replanning Claude call failed, using heuristics", error=str(exc))
             plan_data = {"needs_replan": False, "new_tasks": []}
 
         if not plan_data.get("needs_replan", False):

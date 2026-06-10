@@ -19,7 +19,7 @@ import time
 from datetime import datetime
 from typing import List, Optional
 
-from app.gemini.client import GeminiClient
+from app.claude.agent_client import ClaudeAgentClient
 from sqlalchemy.orm import Session
 
 from app.agent.decision_engine import DecisionEngine
@@ -64,7 +64,7 @@ class AgentLoop:
     └──────────────────────────────────────────────────────────────┘
     """
 
-    def __init__(self, client: GeminiClient, settings: Settings) -> None:
+    def __init__(self, client: ClaudeAgentClient, settings: Settings) -> None:
         self.client = client
         self.settings = settings
 

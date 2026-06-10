@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from app.gemini.client import GeminiClient, get_gemini_client
+from app.claude.agent_client import ClaudeAgentClient, get_claude_agent_client
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -37,9 +37,9 @@ class LearningService:
     for a given agent run.
     """
 
-    def __init__(self, db: Session, client: Optional[AsyncAnthropic] = None) -> None:
+    def __init__(self, db: Session, client: Optional[ClaudeAgentClient] = None) -> None:
         self._db = db
-        self._client = client or get_gemini_client()
+        self._client = client or get_claude_agent_client()
         self._reward_fn = RewardFunction()
         self._strategy_engine = PromptStrategyEngine(db)
         self._memory = CorrectionMemory(db)

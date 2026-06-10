@@ -7,62 +7,12 @@ from sqlalchemy.orm import Session
 
 from app.agent.models import AgentState, AgentTask, ToolResult
 from app.agent.tools.base import BaseTool
+from app.claude.agent_client import ClaudeUnavailableError
 from app.knowledge.models import Medication
-from app.knowledge.prompts import EXTRACTION_SYSTEM_PROMPT, MEDICATION_EXTRACTION_PROMPT
 from app.knowledge.repository import KnowledgeRepository
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
-
-_TOOL_SCHEMA = {
-    "name": "extract_medications",
-    "description": "Extract all admission and discharge medications with dose, route, frequency",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "admission_medications": {
-                "type": "array",
-                "description": "Medications the patient was taking before admission",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string"},
-                        "dose": {"type": "string"},
-                        "route": {"type": "string"},
-                        "frequency": {"type": "string"},
-                        "indication": {"type": "string"},
-                        "confidence": {"type": "number"},
-                        "page_number": {"type": "integer"},
-                        "evidence": {"type": "string"},
-                    },
-                    "required": ["name", "confidence", "page_number", "evidence"],
-                },
-            },
-            "discharge_medications": {
-                "type": "array",
-                "description": "Medications prescribed at discharge",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string"},
-                        "dose": {"type": "string"},
-                        "route": {"type": "string"},
-                        "frequency": {"type": "string"},
-                        "indication": {"type": "string"},
-                        "is_changed_at_discharge": {"type": "boolean"},
-                        "change_reason": {"type": "string"},
-                        "is_discontinued": {"type": "boolean"},
-                        "confidence": {"type": "number"},
-                        "page_number": {"type": "integer"},
-                        "evidence": {"type": "string"},
-                    },
-                    "required": ["name", "confidence", "page_number", "evidence"],
-                },
-            },
-        },
-        "required": ["admission_medications", "discharge_medications"],
-    },
-}
 
 
 def _parse_med_raw(
@@ -128,31 +78,17 @@ class MedicationTool(BaseTool):
         if not doc_list:
             return self._empty_result(task, "No document text available")
 
-        sections = []
-        for _, doc_name, doc_type, text in doc_list:
-            sections.append(f"=== Document: {doc_name} (type: {doc_type}) ===\n{text}")
-        combined = "\n\n".join(sections)
-
-        prompt = MEDICATION_EXTRACTION_PROMPT.format(document_text=combined)
-
         try:
-            import json
-            prompt_with_schema = f"""{EXTRACTION_SYSTEM_PROMPT}
-
-{prompt}
-
-Please output ONLY valid JSON matching the following schema:
-{json.dumps(_TOOL_SCHEMA['input_schema'])}"""
-            response_text = await self.client.generate_content(
-                prompt=prompt_with_schema,
-                model_type="text",
-            )
+            extraction = await self._get_consolidated_extraction(doc_list)
+        except ClaudeUnavailableError as exc:
+            logger.error(f"{self.name} Claude unavailable", error=str(exc))
+            return self._claude_unavailable_result(task, state, exc)
         except Exception as exc:
             logger.error(f"{self.name} API error", error=str(exc))
-            return self._empty_result(task, f"Gemini API error: {exc}")
+            return self._empty_result(task, f"Claude API error: {exc}")
 
-        raw = self._parse_json_response(response_text) or {}
-        tokens = self._count_tokens(response_text)
+        raw = extraction.data
+        tokens = extraction.tokens_used
         facts_added = 0
 
         default_doc_id, default_doc_name = doc_list[0][0], doc_list[0][1]
@@ -183,7 +119,7 @@ Please output ONLY valid JSON matching the following schema:
         adm_count = len(raw.get("admission_medications", []))
         dis_count = len(raw.get("discharge_medications", []))
 
-        state.add_tokens(len(prompt) // 4, tokens)
+        state.add_tokens(extraction.input_tokens_used, tokens)
 
         return self._ok_result(
             task=task,

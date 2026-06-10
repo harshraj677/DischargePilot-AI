@@ -27,6 +27,7 @@ import {
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { SummaryStatusBadge } from "@/components/ui/Badge";
+import { ClaudeStatusPanel } from "@/components/dashboard/ClaudeStatusPanel";
 import { patients as patientsApi } from "@/lib/api";
 import { formatDate, formatRelativeTime } from "@/lib/utils";
 import type { PatientListItem } from "@/lib/types";
@@ -122,6 +123,9 @@ export default function DashboardPage() {
           loading={false}
         />
       </div>
+
+      {/* Claude Status */}
+      <ClaudeStatusPanel />
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Activity Chart */}

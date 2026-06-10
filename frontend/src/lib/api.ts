@@ -15,6 +15,7 @@ import type {
   DoctorReview,
   PromptStrategy,
   LearningMetrics,
+  ClaudeStatus,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
@@ -214,4 +215,10 @@ export const learning = {
 
   getStrategies: (): Promise<PromptStrategy[]> =>
     request(`/learning/strategies`),
+};
+
+// ── System ────────────────────────────────────────────────────────────────────
+
+export const system = {
+  claudeStatus: (): Promise<ClaudeStatus> => request(`/system/claude-status`),
 };

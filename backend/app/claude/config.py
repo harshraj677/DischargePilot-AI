@@ -15,7 +15,7 @@ class ClaudeConfig:
     """Anthropic Claude API configuration"""
 
     # API Configuration — resolved from settings/.env, falling back to the
-    # process environment (mirrors the GEMINI_API_KEY pattern in app/gemini/config.py)
+    # process environment
     API_KEY: Optional[str] = settings.ANTHROPIC_API_KEY or os.getenv("ANTHROPIC_API_KEY")
 
     # Model Selection — override via ANTHROPIC_VISION_MODEL in .env
@@ -23,7 +23,18 @@ class ClaudeConfig:
         "ANTHROPIC_VISION_MODEL", "claude-opus-4-8"
     )
 
+    # Text/reasoning model — used by the agent loop, extraction engine,
+    # summary generator, and learning system. Override via ANTHROPIC_TEXT_MODEL.
+    TEXT_MODEL: str = settings.ANTHROPIC_TEXT_MODEL or os.getenv(
+        "ANTHROPIC_TEXT_MODEL", "claude-sonnet-4-6"
+    )
+
     MAX_OUTPUT_TOKENS: int = 4096
+
+    # Retry/backoff for text/agent calls (vision OCR has its own retry in
+    # app/ocr/providers/claude.py)
+    MAX_RETRIES: int = settings.CLAUDE_MAX_RETRIES
+    RETRY_BASE_DELAY: float = settings.CLAUDE_RETRY_BASE_DELAY
 
     # Vision OCR Prompt
     # No JSON-schema description needed here — output_format=OCRPageExtraction

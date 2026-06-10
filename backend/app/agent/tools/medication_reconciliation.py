@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.agent.models import AgentState, AgentTask, ToolResult
 from app.agent.prompts import MEDICATION_RECONCILIATION_PROMPT
 from app.agent.tools.base import BaseTool
+from app.claude.agent_client import ClaudeUnavailableError
 from app.knowledge.repository import KnowledgeRepository
 from app.utils.logging import get_logger
 
@@ -100,9 +101,12 @@ Please output ONLY valid JSON matching the following schema:
                 prompt=prompt_with_schema,
                 model_type="text",
             )
+        except ClaudeUnavailableError as exc:
+            logger.error(f"{self.name} Claude unavailable", error=str(exc))
+            return self._claude_unavailable_result(task, state, exc)
         except Exception as exc:
             logger.error(f"{self.name} API error", error=str(exc))
-            return self._empty_result(task, f"Gemini API error: {exc}")
+            return self._empty_result(task, f"Claude API error: {exc}")
 
         raw = self._parse_json_response(response_text) or {}
         tokens = self._count_tokens(response_text)

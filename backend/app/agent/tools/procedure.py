@@ -6,38 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.agent.models import AgentState, AgentTask, ToolResult
 from app.agent.tools.base import BaseTool
+from app.claude.agent_client import ClaudeUnavailableError
 from app.knowledge.models import Procedure
-from app.knowledge.prompts import EXTRACTION_SYSTEM_PROMPT, PROCEDURE_EXTRACTION_PROMPT
 from app.knowledge.repository import KnowledgeRepository
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
-
-_TOOL_SCHEMA = {
-    "name": "extract_procedures",
-    "description": "Extract clinical procedures and interventions",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "procedures": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string"},
-                        "date": {"type": "string", "description": "Procedure date if stated, else empty"},
-                        "outcome": {"type": "string", "description": "Outcome or result if stated, else empty"},
-                        "confidence": {"type": "number"},
-                        "page_number": {"type": "integer"},
-                        "evidence": {"type": "string"},
-                    },
-                    "required": ["name", "confidence", "page_number", "evidence"],
-                },
-            },
-        },
-        "required": ["procedures"],
-    },
-}
 
 
 class ProcedureTool(BaseTool):
@@ -57,29 +31,17 @@ class ProcedureTool(BaseTool):
         if not doc_list:
             return self._empty_result(task, "No document text available")
 
-        sections = [f"=== Document: {n} (type: {t}) ===\n{text}" for _, n, t, text in doc_list]
-        combined = "\n\n".join(sections)
-
-        prompt = PROCEDURE_EXTRACTION_PROMPT.format(document_text=combined)
-
         try:
-            import json
-            prompt_with_schema = f"""{EXTRACTION_SYSTEM_PROMPT}
-
-{prompt}
-
-Please output ONLY valid JSON matching the following schema:
-{json.dumps(_TOOL_SCHEMA['input_schema'])}"""
-            response_text = await self.client.generate_content(
-                prompt=prompt_with_schema,
-                model_type="text",
-            )
+            extraction = await self._get_consolidated_extraction(doc_list)
+        except ClaudeUnavailableError as exc:
+            logger.error(f"{self.name} Claude unavailable", error=str(exc))
+            return self._claude_unavailable_result(task, state, exc)
         except Exception as exc:
             logger.error(f"{self.name} API error", error=str(exc))
-            return self._empty_result(task, f"Gemini API error: {exc}")
+            return self._empty_result(task, f"Claude API error: {exc}")
 
-        raw = self._parse_json_response(response_text) or {}
-        tokens = self._count_tokens(response_text)
+        raw = extraction.data
+        tokens = extraction.tokens_used
         facts_added = 0
 
         default_doc_id, default_doc_name = doc_list[0][0], doc_list[0][1]
@@ -122,7 +84,7 @@ Please output ONLY valid JSON matching the following schema:
                 logger.warning("Failed to parse procedure", error=str(exc))
 
         duration_ms = (time.time() - start) * 1000
-        state.add_tokens(len(prompt) // 4, tokens)
+        state.add_tokens(extraction.input_tokens_used, tokens)
 
         return self._ok_result(
             task=task,

@@ -1,54 +1,17 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict
 
 from sqlalchemy.orm import Session
 
 from app.agent.models import AgentState, AgentTask, ToolResult
 from app.agent.tools.base import BaseTool
-from app.knowledge.models import Diagnosis, EvidencedFact
-from app.knowledge.prompts import DIAGNOSIS_EXTRACTION_PROMPT, EXTRACTION_SYSTEM_PROMPT
+from app.claude.agent_client import ClaudeUnavailableError
+from app.knowledge.models import Diagnosis, FollowUp
 from app.knowledge.repository import KnowledgeRepository
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
-
-_TOOL_SCHEMA = {
-    "name": "extract_diagnoses",
-    "description": "Extract all clinical diagnoses from the patient documents",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "diagnoses": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string", "description": "Full diagnosis name"},
-                        "icd_code": {"type": "string", "description": "ICD-10 code if explicitly listed"},
-                        "is_principal": {"type": "boolean", "description": "True for primary/admitting diagnosis"},
-                        "confidence": {"type": "number", "description": "0.5-1.0"},
-                        "page_number": {"type": "integer"},
-                        "evidence": {"type": "string", "description": "Verbatim text excerpt, max 300 chars"},
-                    },
-                    "required": ["name", "is_principal", "confidence", "page_number", "evidence"],
-                },
-            },
-            "hospital_course": {
-                "type": "string",
-                "description": "Hospital course summary paragraph if found, else empty string",
-            },
-            "hospital_course_page": {"type": "integer", "description": "Page where hospital course was found"},
-            "discharge_condition": {
-                "type": "string",
-                "description": "Discharge condition (stable/fair/guarded/critical) if stated, else empty string",
-            },
-            "discharge_condition_page": {"type": "integer"},
-        },
-        "required": ["diagnoses"],
-    },
-}
 
 
 class DiagnosisTool(BaseTool):
@@ -68,31 +31,17 @@ class DiagnosisTool(BaseTool):
         if not doc_list:
             return self._empty_result(task, "No document text available")
 
-        sections = []
-        for doc_id, doc_name, doc_type, text in doc_list:
-            sections.append(f"=== Document: {doc_name} (type: {doc_type}) ===\n{text}")
-        combined = "\n\n".join(sections)
-
-        prompt = DIAGNOSIS_EXTRACTION_PROMPT.format(document_text=combined)
-
         try:
-            import json
-            prompt_with_schema = f"""{EXTRACTION_SYSTEM_PROMPT}
-
-{prompt}
-
-Please output ONLY valid JSON matching the following schema:
-{json.dumps(_TOOL_SCHEMA['input_schema'])}"""
-            response_text = await self.client.generate_content(
-                prompt=prompt_with_schema,
-                model_type="text",
-            )
+            extraction = await self._get_consolidated_extraction(doc_list)
+        except ClaudeUnavailableError as exc:
+            logger.error(f"{self.name} Claude unavailable", error=str(exc))
+            return self._claude_unavailable_result(task, state, exc)
         except Exception as exc:
             logger.error(f"{self.name} API error", error=str(exc))
-            return self._empty_result(task, f"Gemini API error: {exc}")
+            return self._empty_result(task, f"Claude API error: {exc}")
 
-        raw = self._parse_json_response(response_text) or {}
-        tokens = self._count_tokens(response_text)
+        raw = extraction.data
+        tokens = extraction.tokens_used
         facts_added = 0
 
         # Use first document as default provenance source
@@ -149,11 +98,36 @@ Please output ONLY valid JSON matching the following schema:
             kb.add_fact("discharge_condition", condition_fact)
             facts_added += 1
 
+        # Follow-ups
+        followup_count = 0
+        for fu_raw in raw.get("followups", []):
+            try:
+                instruction_fact = self._make_evidenced_fact(
+                    value=fu_raw["instruction"],
+                    confidence=float(fu_raw.get("confidence", 0.8)),
+                    source_doc_id=default_doc_id,
+                    source_doc_name=default_doc_name,
+                    page_number=int(fu_raw.get("page_number", 1)),
+                    evidence=fu_raw.get("evidence", ""),
+                )
+                followup = FollowUp(
+                    instruction=instruction_fact,
+                    specialist=fu_raw.get("specialist") or None,
+                    timeframe=fu_raw.get("timeframe") or None,
+                    contact=fu_raw.get("contact") or None,
+                )
+                kb.add_fact("follow_up", followup)
+                kb.add_source_document(default_doc_id)
+                facts_added += 1
+                followup_count += 1
+            except Exception as exc:
+                logger.warning("Failed to parse follow-up", error=str(exc), raw=fu_raw)
+
         duration_ms = (time.time() - start) * 1000
         dx_count = len(raw.get("diagnoses", []))
         principal_count = sum(1 for d in raw.get("diagnoses", []) if d.get("is_principal"))
 
-        state.add_tokens(len(prompt) // 4, tokens)
+        state.add_tokens(extraction.input_tokens_used, tokens)
 
         return self._ok_result(
             task=task,
@@ -163,8 +137,9 @@ Please output ONLY valid JSON matching the following schema:
                 "principal_diagnoses": principal_count,
                 "hospital_course_found": bool(course_text),
                 "discharge_condition_found": bool(condition_text),
+                "followups_count": followup_count,
             },
             tokens=tokens,
             duration_ms=duration_ms,
-            notes=f"Extracted {dx_count} diagnoses from {len(doc_list)} documents",
+            notes=f"Extracted {dx_count} diagnoses, {followup_count} follow-ups from {len(doc_list)} documents",
         )

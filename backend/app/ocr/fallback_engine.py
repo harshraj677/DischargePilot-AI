@@ -20,7 +20,6 @@ from app.ocr.models import (
 from app.ocr.providers import (
     OCRProvider,
     ClaudeVisionOCR,
-    GeminiVisionOCR,
     EasyOCRProvider,
     TesseractOCRProvider,
 )
@@ -49,9 +48,8 @@ class OCRFallbackEngine:
     # Provider priority order (can be configured)
     DEFAULT_PROVIDER_PRIORITY = [
         "claude",     # Primary - best for medical
-        "gemini",     # Fallback 1 - alternate vision LLM
-        "easyocr",    # Fallback 2 - lightweight
-        "tesseract",  # Fallback 3 - reliable
+        "easyocr",    # Fallback 1 - lightweight
+        "tesseract",  # Fallback 2 - reliable
     ]
 
     def __init__(
@@ -114,12 +112,6 @@ class OCRFallbackEngine:
             logger.info("Claude Vision OCR initialized")
         except Exception as e:
             logger.warning("Failed to initialize Claude Vision OCR", error=str(e))
-
-        try:
-            self.providers["gemini"] = GeminiVisionOCR()
-            logger.info("Gemini Vision OCR initialized")
-        except Exception as e:
-            logger.warning("Failed to initialize Gemini Vision OCR", error=str(e))
 
         try:
             self.providers["easyocr"] = EasyOCRProvider()

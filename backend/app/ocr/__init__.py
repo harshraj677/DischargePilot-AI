@@ -31,7 +31,7 @@ from .handwriting_processor import HandwritingProcessor
 from .orchestrator import OCROrchestrator
 from .providers import (
     OCRProvider,
-    GeminiVisionOCR,
+    ClaudeVisionOCR,
     EasyOCRProvider,
     TesseractOCRProvider,
 )
@@ -51,7 +51,7 @@ __all__ = [
     "OCROrchestrator",
     # Providers
     "OCRProvider",
-    "GeminiVisionOCR",
+    "ClaudeVisionOCR",
     "EasyOCRProvider",
     "TesseractOCRProvider",
 ]

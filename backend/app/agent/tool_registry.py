@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Optional, Type
 
-from app.gemini.client import GeminiClient, get_gemini_client
+from app.claude.agent_client import ClaudeAgentClient
 
 from app.agent.tools.allergy import AllergyTool
 from app.agent.tools.base import BaseTool
@@ -38,7 +38,7 @@ class ToolRegistry:
     All tools share the same Anthropic client and settings.
     """
 
-    def __init__(self, client: GeminiClient, settings: Settings) -> None:
+    def __init__(self, client: ClaudeAgentClient, settings: Settings) -> None:
         self._client = client
         self._settings = settings
         self._instances: Dict[str, BaseTool] = {}
