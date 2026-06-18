@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     DATABASE_URL: str = f"sqlite:///{BASE_DIR}/dischargepilot.db"
     DATABASE_ECHO: bool = False
 
+    # MongoDB (Phase 1 permanent storage + analytics — additive to SQLite)
+    MONGODB_URI: str = ""
+    MONGODB_DATABASE: str = "dischargepilot"
+    MONGODB_CONNECT_TIMEOUT_MS: int = 5000
+    MONGODB_SERVER_SELECTION_TIMEOUT_MS: int = 5000
+
     # File Storage
     UPLOAD_DIR: Path = BASE_DIR / "uploads"
     MAX_FILE_SIZE_MB: int = 50

@@ -9,6 +9,8 @@ import {
   Brain,
   Activity,
   ChevronRight,
+  Search,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +36,16 @@ const navItems: NavItem[] = [
     label: "Analytics",
     href: "/analytics",
     icon: <BarChart3 className="h-4 w-4" />,
+  },
+  {
+    label: "Review History",
+    href: "/review-history",
+    icon: <ClipboardList className="h-4 w-4" />,
+  },
+  {
+    label: "Search",
+    href: "/search",
+    icon: <Search className="h-4 w-4" />,
   },
   {
     label: "Learning",

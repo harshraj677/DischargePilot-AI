@@ -18,6 +18,11 @@ import type {
   ClaudeStatus,
   GroqStatus,
   LLMStatus,
+  DashboardMetrics,
+  ReviewHistoryResponse,
+  ReviewHistoryFilters,
+  SearchResponse,
+  PatientTimelineResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
@@ -225,4 +230,51 @@ export const system = {
   claudeStatus: (): Promise<ClaudeStatus> => request(`/system/claude-status`),
   groqStatus: (): Promise<GroqStatus> => request(`/system/groq-status`),
   llmStatus: (): Promise<LLMStatus> => request(`/system/llm-status`),
+};
+
+// ── Analytics (Phase 1/2) ───────────────────────────────────────────────────
+
+export const analytics = {
+  dashboard: (): Promise<DashboardMetrics> => request(`/analytics/dashboard`),
+};
+
+// ── Review History (Phase 2) ──────────────────────────────────────────────────
+
+export const reviewHistory = {
+  list: (filters?: ReviewHistoryFilters): Promise<ReviewHistoryResponse> => {
+    const qs = new URLSearchParams();
+    if (filters?.page) qs.set("page", String(filters.page));
+    if (filters?.page_size) qs.set("page_size", String(filters.page_size));
+    if (filters?.severity) qs.set("severity", filters.severity);
+    if (filters?.action) qs.set("action", filters.action);
+    if (filters?.reviewer) qs.set("reviewer", filters.reviewer);
+    if (filters?.date_from) qs.set("date_from", filters.date_from);
+    if (filters?.date_to) qs.set("date_to", filters.date_to);
+    return request(`/review/history?${qs}`);
+  },
+};
+
+// ── Global Search (Phase 2) ───────────────────────────────────────────────────
+
+export const search = {
+  query: (params: {
+    patient_name?: string;
+    mrn?: string;
+    summary_id?: string;
+    document_id?: string;
+  }): Promise<SearchResponse> => {
+    const qs = new URLSearchParams();
+    if (params.patient_name) qs.set("patient_name", params.patient_name);
+    if (params.mrn) qs.set("mrn", params.mrn);
+    if (params.summary_id) qs.set("summary_id", params.summary_id);
+    if (params.document_id) qs.set("document_id", params.document_id);
+    return request(`/search?${qs}`);
+  },
+};
+
+// ── Patient Timeline (Phase 2) ────────────────────────────────────────────────
+
+export const timeline = {
+  get: (patientId: string): Promise<PatientTimelineResponse> =>
+    request(`/patients/${patientId}/timeline`),
 };

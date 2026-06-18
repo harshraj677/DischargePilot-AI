@@ -16,6 +16,7 @@ import {
   Hash,
   Activity,
   Clock,
+  History,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DocumentStatusBadge, AgentStatusBadge, SummaryStatusBadge } from "@/components/ui/Badge";
@@ -145,6 +146,13 @@ export default function PatientDetailPage() {
               >
                 <Bot className="h-4 w-4 text-slate-400" />
                 Agent Execution Center
+              </Link>
+              <Link
+                href={`/patients/${patientId}/timeline`}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <History className="h-4 w-4 text-slate-400" />
+                View Timeline
               </Link>
               {latestRun && (
                 <>

@@ -6,6 +6,7 @@ import os
 import time
 
 from app.config import settings
+from app.database.mongodb import mongodb_manager
 from app.db.database import create_tables
 from app.api.router import api_router
 from app.groq_provider.health import GroqHealthService
@@ -24,6 +25,9 @@ async def lifespan(app: FastAPI):
 
     create_tables()
 
+    if await mongodb_manager.connect():
+        await mongodb_manager.create_indexes()
+
     health = await GroqHealthService.check_connection(use_cache=False)
     if health["status"] == "healthy":
         logger.info("Groq initialization successful", model=health.get("model"))
@@ -37,6 +41,7 @@ async def lifespan(app: FastAPI):
         upload_dir=str(settings.UPLOAD_DIR),
     )
     yield
+    await mongodb_manager.disconnect()
     logger.info("DischargePilot AI shutting down")
 
 

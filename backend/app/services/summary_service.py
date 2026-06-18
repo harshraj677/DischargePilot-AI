@@ -2,15 +2,26 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Optional
+from typing import Dict, List, Optional
 
 from app.groq_provider.agent_client import GroqAgentClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import Settings
-from app.db.models import DischargeReport
+from app.database.mongodb import mongodb_manager
+from app.db.models import DischargeReport, Document, Patient
 from app.knowledge.repository import KnowledgeRepository
-from app.safety.models import SafetyReport
+from app.models.mongo.document import DocumentMongo
+from app.models.mongo.finding import FindingMongo
+from app.models.mongo.patient import PatientMongo
+from app.models.mongo.summary import SummaryMongo
+from app.repositories.document_repository import DocumentRepository
+from app.repositories.finding_repository import FindingRepository
+from app.repositories.patient_repository import PatientRepository
+from app.repositories.summary_repository import SummaryRepository
+from app.safety.models import ReviewFlag, SafetyFinding, SafetyReport
+from app.summary.formatter import format_as_text
 from app.summary.generator import DischargeSummaryGenerator
 from app.summary.models import DischargeSummary, DischargeSummaryStatus
 from app.utils.logging import AuditLogger, get_logger
@@ -58,6 +69,7 @@ class SummaryService:
         )
 
         self._persist(patient_id, run_id, summary, safety_report)
+        await self._persist_to_mongo(patient_id, run_id, summary, safety_report)
 
         audit.log(
             "summary_generated_and_persisted",
@@ -142,3 +154,121 @@ class SummaryService:
             summary_id=summary.summary_id,
         )
         logger.info("DischargeReport persisted", report_id=report.id, run_id=run_id)
+
+    async def _persist_to_mongo(
+        self,
+        patient_id: str,
+        run_id: str,
+        summary: DischargeSummary,
+        safety_report: SafetyReport,
+    ) -> None:
+        """
+        Permanent-storage mirror of the SQLite DischargeReport (Phase 1).
+
+        Best-effort and additive: MongoDB being unavailable must never break
+        the SQLite-backed generation flow above, which has already committed
+        by the time this runs.
+        """
+        db = mongodb_manager.get_database()
+        if db is None:
+            return
+
+        try:
+            patient_row = self._db.get(Patient, patient_id)
+            if patient_row is not None:
+                await PatientRepository(db).upsert(PatientMongo(
+                    id=patient_row.id,
+                    patient_id=patient_row.id,
+                    name=f"{patient_row.first_name} {patient_row.last_name}".strip(),
+                    mrn=patient_row.mrn,
+                    dob=patient_row.date_of_birth,
+                    gender=patient_row.gender,
+                ))
+
+            document_rows = list(
+                self._db.execute(select(Document).where(Document.patient_id == patient_id)).scalars()
+            )
+            document_repo = DocumentRepository(db)
+            for doc_row in document_rows:
+                await document_repo.upsert(DocumentMongo(
+                    id=doc_row.id,
+                    patient_id=doc_row.patient_id,
+                    document_type=doc_row.document_type,
+                    content=doc_row.extracted_text,
+                ))
+
+            severity_counts = self._count_findings_by_severity(safety_report.review_flags)
+            await SummaryRepository(db).create(SummaryMongo(
+                id=summary.summary_id,
+                patient_id=patient_id,
+                summary_text=format_as_text(summary),
+                status=summary.status.value,
+                overall_safety_score=summary.safety_score,
+                completeness_score=summary.completeness_score,
+                high_findings_count=severity_counts["HIGH"],
+                medium_findings_count=severity_counts["MEDIUM"],
+                low_findings_count=severity_counts["LOW"],
+                info_findings_count=severity_counts["INFO"],
+            ))
+
+            findings = self._findings_from_review_flags(
+                summary.summary_id, safety_report.review_flags, safety_report.safety_findings
+            )
+            await FindingRepository(db).create_many(findings)
+
+            logger.info(
+                "Mongo persistence completed",
+                patient_id=patient_id,
+                run_id=run_id,
+                summary_id=summary.summary_id,
+                findings_saved=len(findings),
+            )
+        except Exception as exc:
+            logger.error(
+                "Mongo persistence failed",
+                error=str(exc),
+                patient_id=patient_id,
+                run_id=run_id,
+            )
+
+    @staticmethod
+    def _count_findings_by_severity(flags: List[ReviewFlag]) -> Dict[str, int]:
+        counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
+        for flag in flags:
+            severity = flag.severity.value
+            # No dedicated "critical" bucket in the dashboard summary schema —
+            # critical findings are the most severe, so they roll into "high".
+            if severity == "CRITICAL":
+                counts["HIGH"] += 1
+            elif severity in counts:
+                counts[severity] += 1
+        return counts
+
+    @staticmethod
+    def _findings_from_review_flags(
+        summary_id: str,
+        flags: List[ReviewFlag],
+        safety_findings: List[SafetyFinding],
+    ) -> List[FindingMongo]:
+        # ReviewFlag (clinician-facing, has requires_acknowledgment) and
+        # SafetyFinding (validator-facing, has confidence/evidence) describe
+        # the same underlying issues but aren't linked by a shared id — match
+        # them best-effort on description text to recover confidence/evidence.
+        findings_by_description = {f.description: f for f in safety_findings}
+
+        results: List[FindingMongo] = []
+        for flag in flags:
+            matched = findings_by_description.get(flag.description)
+            results.append(FindingMongo(
+                id=flag.flag_id,
+                summary_id=summary_id,
+                severity=flag.severity.value,
+                category=flag.category.value,
+                title=flag.description[:120],
+                explanation=flag.description,
+                recommendation=flag.recommendation,
+                confidence=matched.confidence if matched else "Moderate",
+                requires_acknowledgment=flag.requires_acknowledgment,
+                evidence=matched.evidence if matched else [],
+            ))
+        return results

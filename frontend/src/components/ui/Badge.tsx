@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { FlagSeverity, SafetyStatus, SummaryStatus, AgentRunStatus, DocumentStatus, ClaudeStatus, GroqStatus, LLMStatus } from "@/lib/types";
+import type { FlagSeverity, SafetyStatus, SummaryStatus, AgentRunStatus, DocumentStatus, ClaudeStatus, GroqStatus, LLMStatus, ReviewActionType } from "@/lib/types";
 
 type BadgeVariant =
   | "critical"
@@ -172,6 +172,15 @@ export function GroqStatusBadge({ status }: { status: GroqStatus["status"] }) {
       {labels[status]}
     </Badge>
   );
+}
+
+export function ReviewActionBadge({ action }: { action: ReviewActionType }) {
+  const map: Record<ReviewActionType, BadgeVariant> = {
+    APPROVED: "success",
+    REJECTED: "critical",
+    ACKNOWLEDGED: "purple",
+  };
+  return <Badge variant={map[action]}>{action}</Badge>;
 }
 
 export function LLMStatusBadge({ status }: { status: LLMStatus["status"] }) {

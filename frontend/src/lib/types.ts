@@ -441,3 +441,138 @@ export interface LLMStatus {
   model: string;
   error?: string;
 }
+
+// ── Analytics Dashboard (Phase 1/2) ───────────────────────────────────────────
+
+export type DashboardSeverity = "HIGH" | "MEDIUM" | "LOW" | "INFO";
+
+export interface SeverityDistribution {
+  HIGH: number;
+  MEDIUM: number;
+  LOW: number;
+  INFO: number;
+}
+
+export interface TopMissingField {
+  field: string;
+  count: number;
+}
+
+export interface TopConflict {
+  title: string;
+  count: number;
+}
+
+export interface DashboardMetrics {
+  total_patients: number;
+  total_documents: number;
+  total_summaries: number;
+  total_findings: number;
+  average_safety_score: number;
+  average_completeness_score: number;
+  high_risk_findings: number;
+  approval_rate: number;
+  rejection_rate: number;
+  acknowledgment_rate: number;
+  severity_distribution: SeverityDistribution;
+  top_missing_fields: TopMissingField[];
+  top_conflicts: TopConflict[];
+}
+
+export const MISSING_FIELD_LABELS: Record<string, string> = {
+  allergy_status: "Allergy Status",
+  admission_date: "Admission Date",
+  hospital_course: "Hospital Course",
+  discharge_condition: "Discharge Condition",
+  medication_dose: "Medication Dose",
+};
+
+// ── Review History (Phase 2) ──────────────────────────────────────────────────
+
+export type ReviewActionType = "APPROVED" | "REJECTED" | "ACKNOWLEDGED";
+
+export interface ReviewHistoryEntry {
+  id: string;
+  finding_id: string;
+  reviewer: string;
+  action: ReviewActionType;
+  comments: string | null;
+  timestamp: string;
+  severity: DashboardSeverity | null;
+  category: string | null;
+  finding_title: string | null;
+  summary_id: string | null;
+  patient_id: string | null;
+  patient_name: string | null;
+}
+
+export interface ReviewHistoryResponse {
+  items: ReviewHistoryEntry[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface ReviewHistoryFilters {
+  page?: number;
+  page_size?: number;
+  severity?: string;
+  action?: ReviewActionType;
+  reviewer?: string;
+  date_from?: string;
+  date_to?: string;
+}
+
+// ── Global Search (Phase 2) ───────────────────────────────────────────────────
+
+export interface SearchResultItem {
+  patient_id: string;
+  patient_name: string;
+  mrn: string | null;
+  summary_id: string | null;
+  status: string | null;
+  safety_score: number | null;
+  completeness_score: number | null;
+  created_at: string | null;
+}
+
+export interface SearchResponse {
+  items: SearchResultItem[];
+  total: number;
+}
+
+// ── Patient Timeline (Phase 2) ────────────────────────────────────────────────
+
+export type TimelineEventType =
+  | "patient_created"
+  | "document_uploaded"
+  | "summary_generated"
+  | "finding_created"
+  | "finding_approved"
+  | "finding_rejected"
+  | "finding_acknowledged";
+
+export interface TimelineEvent {
+  type: TimelineEventType;
+  timestamp: string;
+  title: string;
+  description: string | null;
+  severity: DashboardSeverity | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface PatientTimelineInfo {
+  id: string;
+  name: string;
+  mrn: string | null;
+  dob: string | null;
+  gender: string | null;
+  created_at: string;
+}
+
+export interface PatientTimelineResponse {
+  patient: PatientTimelineInfo;
+  latest_safety_score: number | null;
+  latest_completeness_score: number | null;
+  events: TimelineEvent[];
+}
