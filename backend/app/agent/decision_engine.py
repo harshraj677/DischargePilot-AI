@@ -2,11 +2,37 @@ from __future__ import annotations
 
 from typing import Tuple
 
-from app.agent.models import AgentState, AgentTask, ToolResult
+from app.agent.models import AgentState, AgentTask, MAX_REPLAN_ATTEMPTS, ToolResult
 from app.knowledge.repository import KnowledgeRepository
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _escalation_already_scheduled(state: AgentState) -> bool:
+    return state.has_completed("escalation_manager") or any(
+        t.tool_name == "escalation_manager" for t in state.pending_tasks
+    )
+
+
+def _replan_allowed(state: AgentState, trigger_tool: str) -> bool:
+    """
+    Guards against infinite replanning loops:
+    - Never replan twice for the same trigger tool (each tool only runs
+      once per run, so a second trigger would mean something upstream is
+      already broken — don't make it worse by calling the LLM again).
+    - Stop replanning once the run-wide cap is reached.
+    """
+    if trigger_tool in state.replanned_triggers:
+        return False
+    if len(state.replanned_triggers) >= MAX_REPLAN_ATTEMPTS:
+        logger.warning(
+            "Replan cap reached — refusing to trigger another replan",
+            trigger_tool=trigger_tool,
+            replanned_triggers=state.replanned_triggers,
+        )
+        return False
+    return True
 
 
 class DecisionEngine:
@@ -61,23 +87,36 @@ class DecisionEngine:
 
         # -- Conflict detection triggered replan --
         if task.tool_name == "conflict_detector" and findings.get("conflicts_detected", 0) > 0:
-            reasoning = (
-                f"Conflict detection found {findings['conflicts_detected']} conflict(s). "
-                f"Safety assessment: {findings.get('safety_assessment', 'unknown')}. "
-                f"Replanning to ensure escalation_manager is in the plan."
-            )
-            next_action = "Replan to add escalation_manager if not already pending"
-            return True, reasoning, next_action
+            if _escalation_already_scheduled(state):
+                # escalation_manager is already in the initial plan (or
+                # done) — no need to call the LLM replanner at all. This is
+                # the common case and the main thing that used to cause
+                # repeated, unnecessary (and hallucination-prone) replan
+                # calls on every conflict_detector run.
+                pass
+            elif _replan_allowed(state, task.tool_name):
+                state.replanned_triggers.append(task.tool_name)
+                reasoning = (
+                    f"Conflict detection found {findings['conflicts_detected']} conflict(s). "
+                    f"Safety assessment: {findings.get('safety_assessment', 'unknown')}. "
+                    f"Replanning to ensure escalation_manager is in the plan."
+                )
+                next_action = "Replan to add escalation_manager if not already pending"
+                return True, reasoning, next_action
 
         # -- High-risk medication changes --
         if task.tool_name == "medication_reconciler" and findings.get("high_risk_changes"):
-            reasoning = (
-                f"Medication reconciliation found high-risk changes: "
-                f"{', '.join(findings['high_risk_changes'][:3])}. "
-                f"Replanning to ensure escalation."
-            )
-            next_action = "Replan to add escalation_manager if not already pending"
-            return True, reasoning, next_action
+            if _escalation_already_scheduled(state):
+                pass
+            elif _replan_allowed(state, task.tool_name):
+                state.replanned_triggers.append(task.tool_name)
+                reasoning = (
+                    f"Medication reconciliation found high-risk changes: "
+                    f"{', '.join(findings['high_risk_changes'][:3])}. "
+                    f"Replanning to ensure escalation."
+                )
+                next_action = "Replan to add escalation_manager if not already pending"
+                return True, reasoning, next_action
 
         # -- Normal success --
         facts = result.facts_extracted

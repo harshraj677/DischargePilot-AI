@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.agent.models import AgentState, AgentTask, ToolResult
 from app.agent.tools.base import BaseTool
-from app.claude.agent_client import ClaudeUnavailableError
+from app.groq_provider.agent_client import GroqUnavailableError
 from app.knowledge.models import PendingResult
 from app.knowledge.repository import KnowledgeRepository
 from app.utils.logging import get_logger
@@ -33,12 +33,12 @@ class PendingResultTool(BaseTool):
 
         try:
             extraction = await self._get_consolidated_extraction(doc_list)
-        except ClaudeUnavailableError as exc:
-            logger.error(f"{self.name} Claude unavailable", error=str(exc))
-            return self._claude_unavailable_result(task, state, exc)
+        except GroqUnavailableError as exc:
+            logger.error(f"{self.name} Groq unavailable", error=str(exc))
+            return self._groq_unavailable_result(task, state, exc)
         except Exception as exc:
             logger.error(f"{self.name} API error", error=str(exc))
-            return self._empty_result(task, f"Claude API error: {exc}")
+            return self._empty_result(task, f"Groq API error: {exc}")
 
         raw = extraction.data
         tokens = extraction.tokens_used

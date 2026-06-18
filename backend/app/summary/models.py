@@ -19,11 +19,21 @@ class SummaryStatus(str, Enum):
 
 
 class DischargeSummaryStatus(str, Enum):
-    """Lifecycle state of the full discharge summary document."""
-    DRAFT = "draft"
-    PENDING_REVIEW = "pending_review"
-    APPROVED = "approved"
-    REJECTED = "rejected"
+    """
+    Lifecycle state of the full discharge summary document.
+
+    Uppercase to match every other enum exposed to the frontend
+    (SafetyStatus, SafetySeverity, AgentRunStatus, etc.) and the frontend's
+    SummaryReviewStatus literal type. This used to serialize lowercase,
+    which crashed the Summary page the same way the lowercase SafetyStatus
+    crashed the Safety Review page: STATUS_CONFIG[summaryData.status]
+    looked up e.g. "pending_review" against uppercase-only keys and
+    returned undefined, then `statusCfg!.bg` threw.
+    """
+    DRAFT = "DRAFT"
+    PENDING_REVIEW = "PENDING_REVIEW"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
 
 
 class SummarySection(BaseModel):

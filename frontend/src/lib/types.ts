@@ -234,6 +234,8 @@ export interface AgentRunSummary {
   created_at: string;
   completed_at: string | null;
   error_message: string | null;
+  stack_trace: string | null;
+  failed_component: string | null;
 }
 
 export interface AgentRunDetail extends AgentRunSummary {
@@ -394,4 +396,48 @@ export interface ClaudeStatus {
     status: "active" | "inactive";
     requests: number;
   };
+}
+
+// ── System / Groq status ─────────────────────────────────────────────────────
+
+export interface GroqStatus {
+  provider: "groq";
+  status: "connected" | "degraded" | "not_configured";
+  configured: boolean;
+  text_model: string;
+  vision_model: string;
+  requests: {
+    total: number;
+    text: number;
+    vision: number;
+    ocr: number;
+    errors: number;
+    last_request_at: string | null;
+    last_error: string | null;
+    last_error_at: string | null;
+  };
+  cache: {
+    enabled: boolean;
+    hits: number;
+    misses: number;
+  };
+  ocr: {
+    enabled: boolean;
+    primary_provider: string;
+    status: "active" | "inactive";
+    requests: number;
+  };
+  rate_limit: {
+    hits: number;
+  };
+}
+
+// ── System / LLM auth status ─────────────────────────────────────────────────
+
+export interface LLMStatus {
+  provider: "groq";
+  status: "healthy" | "failed";
+  authenticated: boolean;
+  model: string;
+  error?: string;
 }

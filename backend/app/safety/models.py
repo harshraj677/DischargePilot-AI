@@ -20,10 +20,19 @@ from app.models.enums import SafetySeverity
 # ── Safety-specific enums ─────────────────────────────────────────────────────
 
 class SafetyStatus(str, Enum):
-    """Overall outcome of the safety validation pass."""
-    APPROVED = "approved"
-    REVIEW_REQUIRED = "review_required"
-    BLOCKED = "blocked"
+    """
+    Overall outcome of the safety validation pass.
+
+    Values are uppercase to match every other enum exposed to the frontend
+    (SafetySeverity, AgentRunStatus, etc.) and the frontend's SafetyStatus
+    literal type ("APPROVED" | "REVIEW_REQUIRED" | "BLOCKED"). This used to
+    serialize lowercase, which crashed the Safety Review page —
+    statusConfig[report.overall_status] looked up "blocked" against
+    uppercase-only keys and returned undefined, then `statusCfg!.bg` threw.
+    """
+    APPROVED = "APPROVED"
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
+    BLOCKED = "BLOCKED"
 
 
 class ReviewFlagCategory(str, Enum):

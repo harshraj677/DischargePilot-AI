@@ -16,6 +16,8 @@ import type {
   PromptStrategy,
   LearningMetrics,
   ClaudeStatus,
+  GroqStatus,
+  LLMStatus,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
@@ -221,4 +223,6 @@ export const learning = {
 
 export const system = {
   claudeStatus: (): Promise<ClaudeStatus> => request(`/system/claude-status`),
+  groqStatus: (): Promise<GroqStatus> => request(`/system/groq-status`),
+  llmStatus: (): Promise<LLMStatus> => request(`/system/llm-status`),
 };

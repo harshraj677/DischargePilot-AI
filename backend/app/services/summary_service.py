@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Optional
 
-from app.claude.agent_client import ClaudeAgentClient
+from app.groq_provider.agent_client import GroqAgentClient
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -26,7 +26,7 @@ class SummaryService:
     Wraps DischargeSummaryGenerator, persisting the result in DischargeReport.
     """
 
-    def __init__(self, db: Session, client: ClaudeAgentClient, settings: Settings) -> None:
+    def __init__(self, db: Session, client: GroqAgentClient, settings: Settings) -> None:
         self._db = db
         self._generator = DischargeSummaryGenerator(client, settings)
 
@@ -37,16 +37,25 @@ class SummaryService:
         kb: KnowledgeRepository,
         safety_report: SafetyReport,
     ) -> DischargeSummary:
-        """Generate discharge summary and save it to DischargeReport table."""
+        """
+        Generate discharge summary and save it to DischargeReport table.
 
-        if not safety_report.can_generate_summary:
-            raise ValueError(
-                f"Safety gate blocked summary generation for run {run_id}. "
-                f"Issues: {safety_report.blocking_issues}"
-            )
+        Escalation must never bypass SummaryGenerator — this no longer
+        refuses to generate when the safety gate is BLOCKED (critical
+        findings still ride along as review_flags on the persisted summary).
+        """
+        print("SUMMARY_GENERATOR_STARTED", flush=True)
+        logger.info("SUMMARY_GENERATOR_STARTED", patient_id=patient_id, run_id=run_id)
 
-        logger.info("Generating discharge summary", patient_id=patient_id, run_id=run_id)
         summary = await self._generator.generate(kb, safety_report, run_id)
+
+        print("SUMMARY_GENERATOR_COMPLETED", flush=True)
+        logger.info(
+            "SUMMARY_GENERATOR_COMPLETED",
+            patient_id=patient_id,
+            run_id=run_id,
+            summary_id=summary.summary_id,
+        )
 
         self._persist(patient_id, run_id, summary, safety_report)
 
@@ -106,16 +115,30 @@ class SummaryService:
         summary: DischargeSummary,
         safety_report: SafetyReport,
     ) -> None:
+        # NOTE: model_dump() (no mode="json") leaves datetime fields
+        # (generated_at, etc.) as raw Python datetime objects, which
+        # json.dumps() cannot serialize — this raised TypeError and aborted
+        # before db.commit() ever ran, so no DischargeReport was ever saved.
+        # mode="json" recursively converts datetimes (and other non-JSON
+        # types) to JSON-safe values first.
         report = DischargeReport(
             patient_id=patient_id,
             agent_run_id=run_id,
             status=summary.status.value,
-            summary_json=json.dumps(summary.model_dump()),
-            safety_report_json=json.dumps(safety_report.model_dump()),
+            summary_json=json.dumps(summary.model_dump(mode="json")),
+            safety_report_json=json.dumps(safety_report.model_dump(mode="json")),
             completeness_score=summary.completeness_score,
             safety_score=summary.safety_score,
         )
         self._db.add(report)
         self._db.commit()
         self._db.refresh(report)
+        print(f"SUMMARY SAVED FOR PATIENT {patient_id}", flush=True)
+        logger.info(
+            f"SUMMARY SAVED FOR PATIENT {patient_id}",
+            patient_id=patient_id,
+            run_id=run_id,
+            report_id=report.id,
+            summary_id=summary.summary_id,
+        )
         logger.info("DischargeReport persisted", report_id=report.id, run_id=run_id)

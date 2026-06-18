@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from app.claude.agent_client import ClaudeAgentClient
+from app.groq_provider.agent_client import GroqAgentClient
 
 from app.config import Settings
 from app.knowledge.repository import KnowledgeRepository
@@ -19,7 +19,7 @@ from app.utils.logging import AuditLogger, get_logger
 logger = get_logger(__name__)
 audit = AuditLogger(module="summary_generator")
 
-_CLAUDE_MAX_TOKENS = 1500
+_GROQ_MAX_TOKENS = 1500
 
 
 class DischargeSummaryGenerator:
@@ -28,12 +28,12 @@ class DischargeSummaryGenerator:
 
     Structured sections (demographics, medications, labs) use template-based
     generation with zero hallucination risk. Narrative sections (hospital course,
-    discharge condition) call Claude with ONLY KB facts injected as context.
+    discharge condition) call Groq with ONLY KB facts injected as context.
     """
 
-    def __init__(self, client: ClaudeAgentClient, settings: Settings) -> None:
+    def __init__(self, client: GroqAgentClient, settings: Settings) -> None:
         self._client = client
-        self._model = settings.CLAUDE_MODEL
+        self._model = settings.GROQ_MODEL
 
     async def generate(
         self,
@@ -43,10 +43,21 @@ class DischargeSummaryGenerator:
     ) -> DischargeSummary:
         patient_id = kb.kb.patient_id
 
+        # NOTE: this used to raise ValueError and refuse to generate at all
+        # when safety_report.can_generate_summary was False (critical safety
+        # findings) — which meant an escalated run could NEVER get a
+        # discharge summary, since this is the only thing that produces one.
+        # Escalation must never bypass SummaryGenerator: critical findings
+        # are still fully visible via safety_report.review_flags (attached
+        # to sections below, CRITICAL severity, requires_acknowledgment),
+        # they just no longer block the document from existing.
         if not safety_report.can_generate_summary:
-            raise ValueError(
-                f"Cannot generate summary: safety validation returned BLOCKED. "
-                f"Blocking issues: {safety_report.blocking_issues}"
+            logger.warning(
+                "Generating summary despite BLOCKED safety status — critical "
+                "findings will be attached as review flags requiring clinician acknowledgment",
+                patient_id=patient_id,
+                run_id=run_id,
+                blocking_issues=safety_report.blocking_issues,
             )
 
         logger.info("Starting summary generation", patient_id=patient_id, run_id=run_id)
@@ -73,7 +84,7 @@ class DischargeSummaryGenerator:
         summary.pending_results = self._build_pending_results(kb)
         summary.follow_up = self._build_follow_up(kb)
 
-        # Claude-assisted narrative sections
+        # Groq-assisted narrative sections
         summary.hospital_course = await self._generate_hospital_course(kb)
         summary.discharge_condition = await self._generate_discharge_condition(kb)
         summary.medication_changes = await self._generate_medication_changes(kb)
@@ -245,7 +256,7 @@ class DischargeSummaryGenerator:
             lines.append(line)
         return self._section("follow_up", lines, "template")
 
-    # ── Claude-assisted narrative sections ────────────────────────────────────
+    # ── Groq-assisted narrative sections ────────────────────────────────────
 
     async def _generate_hospital_course(self, kb: KnowledgeRepository) -> SummarySection:
         course = kb.kb.hospital_course
@@ -265,14 +276,14 @@ class DischargeSummaryGenerator:
             narrative = await self._client.generate_content(
                 prompt=prompt,
                 model_type="text",
-                config={"max_output_tokens": _CLAUDE_MAX_TOKENS}
+                config={"max_output_tokens": _GROQ_MAX_TOKENS}
             )
             narrative = narrative.strip()
             return SummarySection(
                 name="hospital_course",
                 content=narrative,
                 status=SummaryStatus.POPULATED,
-                generated_by="claude",
+                generated_by="groq",
                 source_facts_count=1,
             )
         except Exception as exc:
@@ -310,7 +321,7 @@ class DischargeSummaryGenerator:
                 name="discharge_condition",
                 content=text,
                 status=SummaryStatus.POPULATED,
-                generated_by="claude",
+                generated_by="groq",
                 source_facts_count=1,
             )
         except Exception as exc:
@@ -350,7 +361,7 @@ class DischargeSummaryGenerator:
                 name="medication_changes",
                 content=text,
                 status=SummaryStatus.POPULATED,
-                generated_by="claude",
+                generated_by="groq",
                 source_facts_count=len(admission_meds) + len(discharge_meds),
             )
         except Exception as exc:

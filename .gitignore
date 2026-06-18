@@ -90,3 +90,7 @@ outputs/traces/
 
 # Data directory (SQLite in production)
 data/*.db
+
+# Cached LLM responses (runtime artifact, not source)
+cache/
+backend/cache/

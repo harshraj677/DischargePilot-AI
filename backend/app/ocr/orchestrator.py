@@ -43,7 +43,7 @@ class OCROrchestrator:
     
     def __init__(
         self,
-        primary_provider: str = "claude",
+        primary_provider: str = "groq",
         enable_handwriting_detection: bool = True,
     ):
         """

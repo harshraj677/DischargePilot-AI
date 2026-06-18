@@ -302,7 +302,7 @@ async def _run_ocr_fallback(
         pdf_doc = fitz.open(doc.file_path)
         extractor = OCREnhancedExtractor(
             enable_ocr=True,
-            primary_ocr_provider=settings.OCR_PRIMARY_PROVIDER or "claude",
+            primary_ocr_provider=settings.OCR_PRIMARY_PROVIDER or "groq",
         )
         # enhance_extraction_result is sync and blocks on Vision OCR calls —
         # run it in a worker thread so it never blocks the event loop (and so

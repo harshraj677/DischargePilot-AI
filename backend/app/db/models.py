@@ -141,6 +141,8 @@ class AgentRun(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stack_trace: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failed_component: Mapped[str | None] = mapped_column(String(100), nullable=True)
     iteration_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_tokens_in: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_tokens_out: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -153,6 +155,26 @@ class AgentRun(Base):
     )
 
 
+class TraceStep(Base):
+    __tablename__ = "trace_steps"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    run_id: Mapped[str] = mapped_column(String(36), ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False)
+    step: Mapped[int] = mapped_column(Integer, nullable=False)
+    component: Mapped[str] = mapped_column(String(100), nullable=False)
+    input: Mapped[str] = mapped_column(Text, nullable=False)
+    output: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration: Mapped[float] = mapped_column(Float, default=0.0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("idx_trace_steps_run", "run_id"),
+        Index("idx_trace_steps_step", "step"),
+    )
+
+
+
 class DischargeReport(Base):
     __tablename__ = "discharge_reports"
 
@@ -163,8 +185,8 @@ class DischargeReport(Base):
     agent_run_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # "draft" | "pending_review" | "approved" | "rejected"
-    status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending_review", index=True)
+    # "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" (DischargeSummaryStatus)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="PENDING_REVIEW", index=True)
     summary_json: Mapped[str | None] = mapped_column(Text, nullable=True)       # JSON-serialized DischargeSummary
     safety_report_json: Mapped[str | None] = mapped_column(Text, nullable=True) # JSON-serialized SafetyReport
     completeness_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)

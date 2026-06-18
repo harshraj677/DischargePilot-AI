@@ -35,6 +35,22 @@ def create_tables() -> None:
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created / verified")
 
+    # Migration check for new columns in agent_runs table
+    from sqlalchemy import inspect, text
+    try:
+        inspector = inspect(engine)
+        columns = [col["name"] for col in inspector.get_columns("agent_runs")]
+        with engine.begin() as conn:
+            if "stack_trace" not in columns:
+                conn.execute(text("ALTER TABLE agent_runs ADD COLUMN stack_trace TEXT"))
+                logger.info("Added stack_trace column to agent_runs table")
+            if "failed_component" not in columns:
+                conn.execute(text("ALTER TABLE agent_runs ADD COLUMN failed_component VARCHAR(100)"))
+                logger.info("Added failed_component column to agent_runs table")
+    except Exception as exc:
+        logger.error(f"Migration check failed: {exc}")
+
+
 
 def drop_tables() -> None:
     Base.metadata.drop_all(bind=engine)

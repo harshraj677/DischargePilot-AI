@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from app.claude.agent_client import ClaudeAgentClient, get_claude_agent_client
+from app.groq_provider.agent_client import GroqAgentClient, get_groq_agent_client
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -20,17 +20,17 @@ from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/v1/summary", tags=["Summary"])
+router = APIRouter(prefix="/summary", tags=["Summary"])
 
 _safety_engine = SafetyValidationEngine()
-_claude_client: Optional[ClaudeAgentClient] = None
+_groq_client: Optional[GroqAgentClient] = None
 
 
-def _get_client() -> ClaudeAgentClient:
-    global _claude_client
-    if _claude_client is None:
-        _claude_client = get_claude_agent_client()
-    return _claude_client
+def _get_client() -> GroqAgentClient:
+    global _groq_client
+    if _groq_client is None:
+        _groq_client = get_groq_agent_client()
+    return _groq_client
 
 
 def _load_kb_from_run(agent_run: AgentRun) -> KnowledgeRepository:
@@ -152,8 +152,10 @@ async def generate_summary(
     """
     Run safety validation and generate the discharge summary for a completed agent run.
 
-    Returns 422 if the safety gate blocks generation.
-    Returns 200 with the full summary and all review flags.
+    Returns 200 with the full summary and all review flags. Critical safety
+    findings are surfaced as review_flags (some requiring acknowledgment)
+    rather than blocking generation outright — escalation must never bypass
+    SummaryGenerator, otherwise an escalated run could never get a summary.
     """
     agent_run = db.get(AgentRun, run_id)
     if not agent_run or agent_run.patient_id != patient_id:
@@ -170,19 +172,10 @@ async def generate_summary(
 
     kb = _load_kb_from_run(agent_run)
 
-    # Safety gate
+    # Safety validation result is still attached to the persisted summary
+    # (review_flags, blocking_issues, safety_score) for clinician visibility.
     safety_service = SafetyService(db)
     safety_report = await safety_service.validate_agent_run(patient_id, run_id, kb)
-
-    if not safety_report.can_generate_summary:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "message": "Safety validation BLOCKED summary generation",
-                "blocking_issues": safety_report.blocking_issues,
-                "safety_score": safety_report.safety_score,
-            },
-        )
 
     # Generate summary
     summary_service = SummaryService(db, _get_client(), settings)

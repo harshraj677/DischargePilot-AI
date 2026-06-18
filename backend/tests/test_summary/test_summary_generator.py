@@ -270,7 +270,14 @@ class TestGenerateSummary:
         assert "Alice Smith" in summary.patient_info.content
 
     @pytest.mark.asyncio
-    async def test_generate_raises_when_blocked(self):
+    async def test_generate_still_produces_summary_when_blocked(self):
+        """
+        Escalation must never bypass SummaryGenerator: a BLOCKED safety
+        status (critical findings) used to make generate() raise and
+        refuse to produce anything at all, which meant an escalated run
+        could never get a discharge summary. It must now still generate
+        one, carrying the critical findings as review_flags instead.
+        """
         from app.config import settings
         from app.safety.models import SafetyReport, SafetyStatus
         from app.summary.generator import DischargeSummaryGenerator
@@ -287,8 +294,11 @@ class TestGenerateSummary:
             completeness_score=0.5,
             safety_score=0.0,
         )
-        with pytest.raises(ValueError, match="Cannot generate summary"):
-            await gen.generate(repo, blocked_report, run_id="run-001")
+        summary = await gen.generate(repo, blocked_report, run_id="run-001")
+
+        assert summary.patient_id == "p-test"
+        assert summary.safety_report.can_generate_summary is False
+        assert "Critical allergy conflict" in summary.safety_report.blocking_issues
 
     @pytest.mark.asyncio
     async def test_claude_failure_falls_back_to_template(self):

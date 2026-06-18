@@ -8,6 +8,7 @@ import time
 from app.config import settings
 from app.db.database import create_tables
 from app.api.router import api_router
+from app.groq_provider.health import GroqHealthService
 from app.utils.logging import setup_logging, get_logger
 from app.utils.exceptions import DischargePilotException
 
@@ -22,6 +23,12 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.LOG_DIR, exist_ok=True)
 
     create_tables()
+
+    health = await GroqHealthService.check_connection(use_cache=False)
+    if health["status"] == "healthy":
+        logger.info("Groq initialization successful", model=health.get("model"))
+    else:
+        logger.error("Groq initialization failed", error=health.get("error"))
 
     logger.info(
         "DischargePilot AI started",

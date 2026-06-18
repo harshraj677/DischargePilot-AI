@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from app.claude.agent_client import ClaudeAgentClient, get_claude_agent_client
+from app.groq_provider.agent_client import GroqAgentClient, get_groq_agent_client
 
 from app.config import settings
 from app.learning.edit_policy import EditPolicy
@@ -75,8 +75,8 @@ class DoctorReviewerAgent:
     a discharge summary and applying clinical editing standards.
     """
 
-    def __init__(self, client: Optional[ClaudeAgentClient] = None) -> None:
-        self._client = client or get_claude_agent_client()
+    def __init__(self, client: Optional[GroqAgentClient] = None) -> None:
+        self._client = client or get_groq_agent_client()
         self._edit_policy = EditPolicy()
 
     async def review_summary(

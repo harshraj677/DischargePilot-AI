@@ -4,10 +4,11 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from app.claude.agent_client import ClaudeAgentClient, ClaudeUnavailableError
+from app.groq_provider.agent_client import GroqAgentClient, GroqUnavailableError
 
-from app.agent.models import AgentState, AgentTask
+from app.agent.models import AgentState, AgentTask, MAX_REPLAN_ATTEMPTS
 from app.agent.prompts import AGENT_SYSTEM_PROMPT, REPLANNING_PROMPT
+from app.agent.tool_registry import known_tool_names
 from app.config import Settings
 from app.knowledge.repository import KnowledgeRepository
 from app.utils.logging import get_logger
@@ -19,12 +20,14 @@ class AgentPlanner:
     """
     Hybrid planner:
     - Initial plan is generated deterministically from available document types
-    - Replanning uses Claude when new findings require plan adjustments
+    - Replanning uses Groq when new findings require plan adjustments
     """
 
-    def __init__(self, client: ClaudeAgentClient, settings: Settings) -> None:
+    def __init__(self, client: GroqAgentClient, settings: Settings) -> None:
         self.client = client
         self.settings = settings
+        logger.info("Planner initialized")
+
 
     # ── Initial plan ─────────────────────────────────────────────────────────────
 
@@ -73,12 +76,41 @@ class AgentPlanner:
             "Check Drug Interactions", "drug_interaction_checker", 9, [],
             depends_on=[med_task.task_id],
         )
+        # escalation_manager depends only on conflict_detector +
+        # medication_reconciler — deliberately NOT on drug_interaction_checker,
+        # so a stuck/failed optional check can never block the
+        # escalation -> summary critical path (same reasoning as below).
         escalation_task = self._make_task(
             "Evaluate Escalation", "escalation_manager", 10, [],
-            depends_on=[conflict_task.task_id, reconcile_task.task_id, drug_ix_task.task_id],
+            depends_on=[conflict_task.task_id, reconcile_task.task_id],
         )
 
-        tasks.extend([conflict_task, reconcile_task, drug_ix_task, escalation_task])
+        # summary_generator depends on the core extraction + analysis
+        # pipeline (diagnosis, medication, allergy, procedure, pending
+        # results, conflict_detector, medication_reconciler) PLUS
+        # escalation_manager — matching the required pipeline order
+        # (Conflict Detector -> Medication Reconciler -> Escalation Manager
+        # -> Summary Generator). Deliberately NOT on drug_interaction_checker,
+        # so a stuck/failed optional check never blocks summary generation.
+        # Without this task in the initial plan, summary_generator was never
+        # scheduled at all (it isn't even mentioned in REPLANNING_PROMPT),
+        # which is why runs completed extraction/analysis but never produced
+        # a summary and never reached COMPLETED via the natural path.
+        summary_task = self._make_task(
+            "Generate Discharge Summary", "summary_generator", 11, [],
+            depends_on=[
+                dx_task.task_id,
+                med_task.task_id,
+                allergy_task.task_id,
+                proc_task.task_id,
+                pending_task.task_id,
+                conflict_task.task_id,
+                reconcile_task.task_id,
+                escalation_task.task_id,
+            ],
+        )
+
+        tasks.extend([conflict_task, reconcile_task, drug_ix_task, escalation_task, summary_task])
 
         logger.info(
             "Initial plan generated",
@@ -124,7 +156,20 @@ class AgentPlanner:
         findings: Dict[str, Any],
         memory_context: str,
     ) -> List[AgentTask]:
-        """Use Claude to determine what additional tasks are needed."""
+        """Use Groq to determine what additional tasks are needed."""
+        # Backstop against infinite replanning loops — decision_engine
+        # already gates *when* replan() is called, but this is enforced
+        # here too so no future caller can bypass the cap.
+        state.replan_count += 1
+        if state.replan_count > MAX_REPLAN_ATTEMPTS:
+            logger.warning(
+                "Max replan attempts exceeded — refusing further replanning",
+                replan_count=state.replan_count,
+                limit=MAX_REPLAN_ATTEMPTS,
+                last_tool=last_tool,
+            )
+            return []
+
         completed_tools = [t.tool_name for t in state.completed_tasks]
         pending_task_names = [f"{t.name} ({t.tool_name})" for t in state.pending_tasks]
 
@@ -151,27 +196,36 @@ class AgentPlanner:
                 raw_text = "\n".join(raw_text.split("\n")[1:])
                 raw_text = raw_text.rsplit("```", 1)[0]
             plan_data = json.loads(raw_text)
-        except ClaudeUnavailableError as exc:
-            logger.warning("Replanning Claude call unavailable, using heuristics", error=str(exc))
-            reason = f"replanner: Claude unavailable, manual review required ({exc})"
+        except GroqUnavailableError as exc:
+            logger.warning("Replanning Groq call unavailable, using heuristics", error=str(exc))
+            reason = f"replanner: Groq unavailable, manual review required ({exc})"
             if reason not in state.escalation_reasons:
                 state.escalation_reasons.append(reason)
             plan_data = {"needs_replan": False, "new_tasks": []}
         except Exception as exc:
-            logger.warning("Replanning Claude call failed, using heuristics", error=str(exc))
+            logger.warning("Replanning Groq call failed, using heuristics", error=str(exc))
             plan_data = {"needs_replan": False, "new_tasks": []}
 
         if not plan_data.get("needs_replan", False):
             return []
 
-        new_tasks = []
+        valid_tools = known_tool_names()
+        new_tasks: List[AgentTask] = []
         for t_raw in plan_data.get("new_tasks", []):
             tool_name = t_raw.get("tool_name", "")
             if not tool_name:
                 continue
-            if state.has_completed(tool_name):
+            if tool_name not in valid_tools:
+                # Reject hallucinated/misspelled tool names outright — an
+                # unknown tool_name would otherwise become a task that can
+                # never succeed and (absent the executor fix) never leaves
+                # pending_tasks, looping forever until the iteration cap.
+                logger.warning("Replanner proposed unknown tool — rejected", tool_name=tool_name)
                 continue
-            if any(t.tool_name == tool_name for t in state.pending_tasks):
+            # Centralized duplicate guard: skip if this tool already has a
+            # task anywhere (pending/completed/failed) OR was already added
+            # earlier in this same replan batch.
+            if state.has_task(tool_name) or any(t.tool_name == tool_name for t in new_tasks):
                 continue
             task = self._make_task(
                 name=t_raw.get("name", tool_name),

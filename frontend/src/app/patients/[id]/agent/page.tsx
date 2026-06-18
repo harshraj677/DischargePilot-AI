@@ -218,6 +218,38 @@ export default function AgentPage() {
               </div>
             )}
 
+            {isFailed && activeRun && (
+              <div className="mb-4 rounded-lg bg-red-50 p-4 border border-red-200 text-xs">
+                <div className="flex items-center gap-1.5 text-red-800 font-semibold mb-2">
+                  <XCircle className="h-4 w-4 text-red-600" />
+                  <span>Run Failed</span>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <span className="font-semibold text-red-950 block">Component:</span>
+                    <span className="text-red-700 font-mono">{activeRun.failed_component || "Unknown"}</span>
+                  </div>
+                  <div>
+                    <span className="font-semibold text-red-950 block">Reason:</span>
+                    <span className="text-red-700">{activeRun.error_message || "Unknown error occurred"}</span>
+                  </div>
+                  <div>
+                    <span className="font-semibold text-red-950 block">Suggested Fix:</span>
+                    <span className="text-red-700 font-mono bg-red-100/60 px-1.5 py-0.5 rounded block mt-0.5">
+                      {activeRun.failed_component === "ToolRegistry" || activeRun.error_message?.includes("GROQ_API_KEY")
+                        ? "Set GROQ_API_KEY in backend/.env"
+                        : activeRun.failed_component === "GroqClient"
+                        ? "Check your GROQ_API_KEY value or credit balance"
+                        : activeRun.failed_component === "Database"
+                        ? "Verify database connection or migrations"
+                        : "Check backend/.env and uvicorn logs"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+
             {!isRunning && !isComplete && (
               <button
                 onClick={handleStartRun}

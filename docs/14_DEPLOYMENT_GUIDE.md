@@ -26,7 +26,7 @@ CLAUDE_MODEL=claude-sonnet-4-6        # AI model to use
 CLAUDE_MAX_TOKENS=8192                # Max tokens per call
 
 # ── Agent Settings ────────────────────────────────────────────────
-AGENT_MAX_ITERATIONS=15               # Max agent loop iterations
+AGENT_MAX_ITERATIONS=20               # Max agent loop iterations
 AGENT_TIMEOUT_SECONDS=300             # 5-minute timeout
 
 # ── File Storage ──────────────────────────────────────────────────

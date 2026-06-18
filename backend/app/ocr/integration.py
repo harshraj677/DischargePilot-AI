@@ -36,7 +36,7 @@ class OCREnhancedExtractor:
     def __init__(
         self,
         enable_ocr: bool = True,
-        primary_ocr_provider: str = "claude",
+        primary_ocr_provider: str = "groq",
         enable_handwriting_detection: bool = True,
     ):
         """

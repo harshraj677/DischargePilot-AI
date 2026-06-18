@@ -64,7 +64,7 @@ class TraceGenerator:
         reasoning: str,
         plan_summary: str,
         iteration: int,
-    ) -> None:
+    ) -> TraceStep:
         step = TraceStep(
             step=len(self._trace) + 1,
             reasoning=reasoning,
@@ -76,13 +76,14 @@ class TraceGenerator:
         )
         self._trace.append(step)
         logger.info("Planning step recorded", step=step.step, iteration=iteration)
+        return step
 
     def record_replan_step(
         self,
         trigger: str,
         new_task_names: List[str],
         reasoning: str,
-    ) -> None:
+    ) -> TraceStep:
         step = TraceStep(
             step=len(self._trace) + 1,
             reasoning=reasoning,
@@ -94,12 +95,13 @@ class TraceGenerator:
         )
         self._trace.append(step)
         logger.info("Replanning step recorded", trigger=trigger, new_tasks=new_task_names)
+        return step
 
     def record_termination(
         self,
         reason: str,
         state: AgentState,
-    ) -> None:
+    ) -> TraceStep:
         step = TraceStep(
             step=len(self._trace) + 1,
             reasoning=reason,
@@ -116,6 +118,8 @@ class TraceGenerator:
         )
         self._trace.append(step)
         logger.info("Termination step recorded", reason=reason, status=state.status.value)
+        return step
+
 
     def get_trace(self) -> List[TraceStep]:
         return list(self._trace)

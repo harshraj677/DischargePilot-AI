@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import time
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.agent.models import AgentState, AgentTask, ToolResult
+from app.agent.models import AgentState, AgentTask, TaskStatus, ToolResult
 from app.agent.tool_registry import ToolRegistry
 from app.knowledge.repository import KnowledgeRepository
 from app.utils.logging import get_logger
@@ -39,12 +40,26 @@ class ExecutionEngine:
         tool = self.registry.get(task.tool_name)
         if tool is None:
             error = f"Tool '{task.tool_name}' not found in registry"
-            logger.error("Unknown tool requested", tool_name=task.tool_name)
+            logger.error(
+                "Unknown tool requested — removing task instead of leaving it "
+                "pending forever (this is what causes silent timeouts)",
+                tool_name=task.tool_name,
+                task_id=task.task_id,
+            )
+            # A tool that doesn't exist will NEVER succeed on retry, so mark
+            # it failed and remove it from pending_tasks immediately — never
+            # let it sit there to be reselected on every future iteration.
+            task.status = TaskStatus.FAILED
+            task.error = error
+            task.completed_at = datetime.utcnow()
+            state.pending_tasks = [t for t in state.pending_tasks if t.task_id != task.task_id]
+            state.failed_tasks.append(task)
             return ToolResult(
                 task_id=task.task_id,
                 tool_name=task.tool_name,
                 success=False,
                 error=error,
+                trace_notes=error,
             )
 
         state.mark_task_in_progress(task)

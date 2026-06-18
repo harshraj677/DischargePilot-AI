@@ -15,6 +15,7 @@ import json
 import os
 import tempfile
 import uuid
+from datetime import datetime
 from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -101,30 +102,35 @@ class TestPatientCRUDFlow:
 
     def test_create_patient_returns_201(self, client):
         payload = {
-            "name": "Integration Test Patient",
+            "first_name": "Integration",
+            "last_name": "Test Patient",
             "mrn": f"MRN-INT-{uuid.uuid4().hex[:6].upper()}",
             "date_of_birth": "1960-01-15",
             "gender": "male",
             "ward": "Cardiology",
         }
-        response = client.post("/api/v1/patients/", json=payload)
+        response = client.post("/api/v1/patients", json=payload)
         assert response.status_code in (200, 201)
         data = response.json()
         assert "id" in data
-        assert data["name"] == payload["name"]
+        assert data["first_name"] == payload["first_name"]
+        assert data["last_name"] == payload["last_name"]
 
     def test_list_patients_returns_200(self, client):
-        response = client.get("/api/v1/patients/")
+        response = client.get("/api/v1/patients")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert isinstance(data, dict)
+        assert "items" in data
+        assert isinstance(data["items"], list)
 
     def test_get_nonexistent_patient_returns_404(self, client):
         response = client.get("/api/v1/patients/nonexistent-uuid-xyz")
         assert response.status_code == 404
 
     def test_create_patient_missing_name_returns_422(self, client):
-        payload = {"mrn": "MRN-TEST-000"}  # Missing required name
-        response = client.post("/api/v1/patients/", json=payload)
+        payload = {"mrn": "MRN-TEST-000"}  # Missing required name fields
+        response = client.post("/api/v1/patients", json=payload)
         assert response.status_code == 422
 
 
@@ -133,13 +139,14 @@ class TestDocumentUploadFlow:
 
     def _create_patient(self, client) -> str:
         payload = {
-            "name": "Upload Test Patient",
+            "first_name": "Upload",
+            "last_name": "Test Patient",
             "mrn": f"MRN-UP-{uuid.uuid4().hex[:6].upper()}",
             "date_of_birth": "1965-03-20",
             "gender": "female",
             "ward": "Internal Medicine",
         }
-        response = client.post("/api/v1/patients/", json=payload)
+        response = client.post("/api/v1/patients", json=payload)
         assert response.status_code in (200, 201)
         return response.json()["id"]
 
@@ -147,26 +154,28 @@ class TestDocumentUploadFlow:
         patient_id = self._create_patient(client)
         with open(sample_pdf_path, "rb") as f:
             response = client.post(
-                f"/api/v1/documents/upload/{patient_id}",
+                f"/api/v1/patients/{patient_id}/documents",
                 files={"file": ("admission_note.pdf", f, "application/pdf")},
                 data={"document_type": "admission_note"},
             )
-        assert response.status_code in (200, 201)
+        assert response.status_code in (200, 201, 202)
         data = response.json()
-        assert "id" in data or "document_id" in data
+        assert "id" in data
 
     def test_list_documents_for_patient(self, client, sample_pdf_path):
         patient_id = self._create_patient(client)
         # Upload a doc first
         with open(sample_pdf_path, "rb") as f:
             client.post(
-                f"/api/v1/documents/upload/{patient_id}",
+                f"/api/v1/patients/{patient_id}/documents",
                 files={"file": ("test.pdf", f, "application/pdf")},
                 data={"document_type": "admission_note"},
             )
-        response = client.get(f"/api/v1/documents/{patient_id}")
+        response = client.get(f"/api/v1/patients/{patient_id}/documents")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert "items" in data
+        assert isinstance(data["items"], list)
 
 
 class TestAgentExecutionFlow:
@@ -174,81 +183,114 @@ class TestAgentExecutionFlow:
 
     def _create_patient_with_doc(self, client, sample_pdf_path) -> str:
         payload = {
-            "name": "Agent Test Patient",
+            "first_name": "Agent",
+            "last_name": "Test Patient",
             "mrn": f"MRN-AG-{uuid.uuid4().hex[:6].upper()}",
             "date_of_birth": "1958-07-10",
             "gender": "male",
             "ward": "ICU",
         }
-        patient_id = client.post("/api/v1/patients/", json=payload).json()["id"]
+        patient_id = client.post("/api/v1/patients", json=payload).json()["id"]
         with open(sample_pdf_path, "rb") as f:
             client.post(
-                f"/api/v1/documents/upload/{patient_id}",
+                f"/api/v1/patients/{patient_id}/documents",
                 files={"file": ("note.pdf", f, "application/pdf")},
                 data={"document_type": "admission_note"},
             )
         return patient_id
 
-    @patch("app.services.agent_service.AgentService.run_agent")
+    @patch("app.services.agent_service.AgentService.start_run")
     def test_run_agent_returns_run_id(self, mock_run, client, sample_pdf_path):
-        mock_run.return_value = {
-            "run_id": "run-test-001",
-            "status": "COMPLETED",
-            "completeness_score": 0.85,
-        }
+        from app.agent.models import AgentRunResult, AgentState, AgentRunStatus
+        from app.knowledge.models import PatientKnowledgeBase
+        
+        now = datetime.utcnow()
+        mock_run.return_value = AgentRunResult(
+            run_id="run-test-001",
+            patient_id="p-001",
+            status=AgentRunStatus.COMPLETED,
+            knowledge_base=PatientKnowledgeBase(patient_id="p-001"),
+            trace=[],
+            final_state=AgentState(
+                run_id="run-test-001",
+                patient_id="p-001",
+                status=AgentRunStatus.COMPLETED,
+                started_at=now,
+                completed_at=now,
+            ),
+            completeness_score=0.85,
+            escalation_required=False,
+            escalation_reasons=[],
+            token_usage={"input": 0, "output": 0},
+            duration_ms=0.0,
+        )
         patient_id = self._create_patient_with_doc(client, sample_pdf_path)
-        response = client.post(f"/api/v1/agent/run/{patient_id}")
+        response = client.post(f"/api/v1/agent/patients/{patient_id}/runs")
         assert response.status_code in (200, 201, 202)
 
-    @patch("app.services.agent_service.AgentService.run_agent")
+    @patch("app.services.agent_service.AgentService.start_run")
     def test_run_agent_no_documents_returns_error(self, mock_run, client):
         payload = {
-            "name": "No Docs Patient",
+            "first_name": "No Docs",
+            "last_name": "Patient",
             "mrn": f"MRN-ND-{uuid.uuid4().hex[:6].upper()}",
             "date_of_birth": "1970-01-01",
             "gender": "male",
         }
-        patient_id = client.post("/api/v1/patients/", json=payload).json()["id"]
+        patient_id = client.post("/api/v1/patients", json=payload).json()["id"]
         mock_run.side_effect = Exception("No documents available")
-        response = client.post(f"/api/v1/agent/run/{patient_id}")
+        response = client.post(f"/api/v1/agent/patients/{patient_id}/runs")
         assert response.status_code in (400, 404, 422, 500)
 
 
 class TestSafetyValidationFlow:
     """Test safety validation API endpoints."""
 
-    @patch("app.services.safety_service.SafetyService.get_safety_report")
+    @patch("app.services.safety_service.SafetyService.validate_agent_run")
     def test_get_safety_report_structure(self, mock_safety, client):
-        mock_safety.return_value = {
-            "overall_status": "APPROVED",
-            "safety_score": 0.92,
-            "can_generate_summary": True,
-            "blocking_issues": [],
-            "warnings": [],
-            "review_flags": [],
-        }
-        response = client.get("/api/v1/safety/report/patient-001/run-001")
+        from app.safety.models import SafetyReport, SafetyStatus
+        
+        mock_safety.return_value = SafetyReport(
+            report_id="rep-001",
+            patient_id="p-001",
+            run_id="run-001",
+            overall_status=SafetyStatus.APPROVED,
+            safety_score=0.92,
+            completeness_score=0.85,
+            can_generate_summary=True,
+            blocking_issues=[],
+            warnings=[],
+            review_flags=[],
+        )
+        response = client.get("/api/v1/summary/patients/patient-001/runs/run-001/safety")
         assert response.status_code in (200, 404)
 
 
 class TestSummaryFlow:
     """Test summary generation and review API endpoints."""
 
-    @patch("app.services.summary_service.SummaryService.generate_summary")
+    @patch("app.services.summary_service.SummaryService.generate_and_persist")
     def test_generate_summary_returns_content(self, mock_gen, client):
-        mock_gen.return_value = {
-            "summary_id": "sum-001",
-            "content": {
-                "patient_info": "Integration Test Patient, 65M",
-                "principal_diagnosis": "NSTEMI",
-                "hospital_course": "Patient treated with anticoagulation...",
-                "discharge_medications": ["Aspirin 81mg", "Metoprolol 25mg"],
-                "follow_up": "Cardiology in 1 week",
-                "discharge_condition": "Stable",
-            },
-            "safety_score": 0.88,
-        }
-        response = client.post("/api/v1/summary/generate/patient-001/run-001")
+        from app.summary.models import DischargeSummary, DischargeSummaryStatus, SummarySection, SummaryStatus
+        
+        mock_gen.return_value = DischargeSummary(
+            summary_id="sum-001",
+            patient_id="patient-001",
+            agent_run_id="run-001",
+            status=DischargeSummaryStatus.PENDING_REVIEW,
+            completeness_score=0.88,
+            safety_score=0.88,
+            generated_at=datetime.utcnow(),
+            sections=[
+                SummarySection(
+                    name="principal_diagnosis",
+                    content="NSTEMI",
+                    status=SummaryStatus.POPULATED,
+                )
+            ],
+            review_flags=[],
+        )
+        response = client.post("/api/v1/summary/patients/patient-001/runs/run-001/generate")
         assert response.status_code in (200, 201, 404)
 
 
@@ -260,56 +302,91 @@ class TestCompleteDischargeWorkflow:
     All external calls (Claude API) are mocked.
     """
 
-    @patch("app.services.agent_service.AgentService.run_agent")
-    @patch("app.services.safety_service.SafetyService.get_safety_report")
-    @patch("app.services.summary_service.SummaryService.generate_summary")
+    @patch("app.services.agent_service.AgentService.start_run")
+    @patch("app.services.safety_service.SafetyService.validate_agent_run")
+    @patch("app.services.summary_service.SummaryService.generate_and_persist")
     def test_full_workflow_succeeds(
         self, mock_summary, mock_safety, mock_agent, client, sample_pdf_path
     ):
-        mock_agent.return_value = {
-            "run_id": "run-e2e-001",
-            "status": "COMPLETED",
-            "completeness_score": 0.90,
-            "escalation_required": False,
-        }
-        mock_safety.return_value = {
-            "overall_status": "APPROVED",
-            "safety_score": 0.95,
-            "can_generate_summary": True,
-            "blocking_issues": [],
-            "warnings": [],
-        }
-        mock_summary.return_value = {
-            "summary_id": "sum-e2e-001",
-            "content": {
-                "principal_diagnosis": "NSTEMI",
-                "discharge_condition": "Stable",
-            },
-        }
+        from app.agent.models import AgentRunResult, AgentState, AgentRunStatus
+        from app.knowledge.models import PatientKnowledgeBase
+        from app.safety.models import SafetyReport, SafetyStatus
+        from app.summary.models import DischargeSummary, DischargeSummaryStatus, SummarySection, SummaryStatus
+        
+        now = datetime.utcnow()
+        mock_agent.return_value = AgentRunResult(
+            run_id="run-e2e-001",
+            patient_id="p-e2e-001",
+            status=AgentRunStatus.COMPLETED,
+            knowledge_base=PatientKnowledgeBase(patient_id="p-e2e-001"),
+            trace=[],
+            final_state=AgentState(
+                run_id="run-e2e-001",
+                patient_id="p-e2e-001",
+                status=AgentRunStatus.COMPLETED,
+                started_at=now,
+                completed_at=now,
+            ),
+            completeness_score=0.90,
+            escalation_required=False,
+            escalation_reasons=[],
+            token_usage={"input": 0, "output": 0},
+            duration_ms=0.0,
+        )
+        mock_safety.return_value = SafetyReport(
+            report_id="rep-e2e-001",
+            patient_id="p-e2e-001",
+            run_id="run-e2e-001",
+            overall_status=SafetyStatus.APPROVED,
+            safety_score=0.95,
+            completeness_score=0.90,
+            can_generate_summary=True,
+            blocking_issues=[],
+            warnings=[],
+            review_flags=[],
+        )
+        mock_summary.return_value = DischargeSummary(
+            summary_id="sum-e2e-001",
+            patient_id="p-e2e-001",
+            agent_run_id="run-e2e-001",
+            status=DischargeSummaryStatus.PENDING_REVIEW,
+            completeness_score=0.90,
+            safety_score=0.95,
+            generated_at=now,
+            sections=[
+                SummarySection(
+                    name="principal_diagnosis",
+                    content="NSTEMI",
+                    status=SummaryStatus.POPULATED,
+                )
+            ],
+            review_flags=[],
+        )
 
         # Step 1: Create patient
         patient_payload = {
-            "name": "E2E Test Patient",
+            "first_name": "E2E",
+            "last_name": "Test Patient",
             "mrn": f"MRN-E2E-{uuid.uuid4().hex[:6].upper()}",
             "date_of_birth": "1960-01-15",
             "gender": "male",
             "ward": "Cardiology",
         }
-        create_resp = client.post("/api/v1/patients/", json=patient_payload)
+        create_resp = client.post("/api/v1/patients", json=patient_payload)
         assert create_resp.status_code in (200, 201)
         patient_id = create_resp.json()["id"]
 
         # Step 2: Upload document
         with open(sample_pdf_path, "rb") as f:
             upload_resp = client.post(
-                f"/api/v1/documents/upload/{patient_id}",
+                f"/api/v1/patients/{patient_id}/documents",
                 files={"file": ("admission.pdf", f, "application/pdf")},
                 data={"document_type": "admission_note"},
             )
-        assert upload_resp.status_code in (200, 201)
+        assert upload_resp.status_code in (200, 201, 202)
 
         # Step 3: Run agent (mocked)
-        agent_resp = client.post(f"/api/v1/agent/run/{patient_id}")
+        agent_resp = client.post(f"/api/v1/agent/patients/{patient_id}/runs")
         assert agent_resp.status_code in (200, 201, 202, 404, 500)
 
         # Workflow chain verified: patient created + document uploaded

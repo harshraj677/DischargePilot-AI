@@ -27,7 +27,8 @@ import {
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { SummaryStatusBadge } from "@/components/ui/Badge";
-import { ClaudeStatusPanel } from "@/components/dashboard/ClaudeStatusPanel";
+import { GroqStatusPanel } from "@/components/dashboard/GroqStatusPanel";
+import { LLMStatusPanel } from "@/components/dashboard/LLMStatusPanel";
 import { patients as patientsApi } from "@/lib/api";
 import { formatDate, formatRelativeTime } from "@/lib/utils";
 import type { PatientListItem } from "@/lib/types";
@@ -124,8 +125,11 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Claude Status */}
-      <ClaudeStatusPanel />
+      {/* LLM auth status */}
+      <LLMStatusPanel />
+
+      {/* Groq Status */}
+      <GroqStatusPanel />
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Activity Chart */}

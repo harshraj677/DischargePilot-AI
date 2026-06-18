@@ -157,7 +157,7 @@ export function DocumentCard({ doc, onDelete, onRetry, onView }: DocumentCardPro
         )}
         {doc.status === "REVIEW_REQUIRED" && (
           <p className="mt-1 text-xs text-amber-700">
-            {doc.processing_error ?? "Scanned document detected — Claude Vision OCR ran but the result needs a clinician's review."}
+            {doc.processing_error ?? "Scanned document detected — Vision OCR ran but the result needs a clinician's review."}
           </p>
         )}
       </div>

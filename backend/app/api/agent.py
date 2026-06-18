@@ -29,6 +29,8 @@ class AgentRunSummary(BaseModel):
     created_at: str
     completed_at: Optional[str] = None
     error_message: Optional[str] = None
+    stack_trace: Optional[str] = None
+    failed_component: Optional[str] = None
 
 
 class AgentRunDetail(AgentRunSummary):
@@ -62,16 +64,62 @@ async def start_agent_run(
     patient_id: str,
     db: Session = Depends(get_db),
 ) -> StartRunResponse:
+    import traceback
+    import uuid
+    from datetime import datetime
+    from app.db.models import AgentRun
+
+    # Create the run record first so it is available even if startup fails
+    run_id = str(uuid.uuid4())
+    run_record = AgentRun(
+        id=run_id,
+        patient_id=patient_id,
+        status=AgentRunStatus.RUNNING.value,
+        started_at=datetime.utcnow(),
+    )
+    db.add(run_record)
+    db.commit()
+
     service = AgentService(db)
     try:
-        result = await service.start_run(patient_id)
-    except HTTPException:
-        raise
+        result = await service.start_run(patient_id, run_id=run_id)
+        if result.status == AgentRunStatus.FAILED:
+            return StartRunResponse(
+                run_id=run_id,
+                patient_id=patient_id,
+                status=AgentRunStatus.FAILED.value,
+                message=f"Agent run failed: {result.error}",
+            )
     except Exception as exc:
-        logger.error("Agent run failed", patient_id=patient_id, error=str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Agent run failed: {exc}",
+        tb = traceback.format_exc()
+        failed_component = "AgentExecutor"
+        if "Groq" in str(exc) or "groq" in str(exc).lower():
+            failed_component = "GroqClient"
+        elif "db" in str(exc).lower() or "database" in str(exc).lower():
+            failed_component = "Database"
+        elif "tool" in str(exc).lower() or "registry" in str(exc).lower():
+            failed_component = "ToolRegistry"
+
+        logger.error(
+            "Agent startup failed",
+            component=failed_component,
+            error=str(exc),
+            traceback=tb
+        )
+        print(f"Agent startup failed\nComponent: {failed_component}\nError: {exc}\nFull traceback:\n{tb}")
+
+        run_record.status = AgentRunStatus.FAILED.value
+        run_record.completed_at = datetime.utcnow()
+        run_record.error_message = str(exc)
+        run_record.failed_component = failed_component
+        run_record.stack_trace = tb
+        db.commit()
+
+        return StartRunResponse(
+            run_id=run_id,
+            patient_id=patient_id,
+            status=AgentRunStatus.FAILED.value,
+            message=f"Agent run failed: {exc}",
         )
 
     return StartRunResponse(
@@ -183,6 +231,8 @@ def _run_to_summary(run: Any) -> AgentRunSummary:
         created_at=run.created_at.isoformat(),
         completed_at=run.completed_at.isoformat() if run.completed_at else None,
         error_message=run.error_message,
+        stack_trace=run.stack_trace,
+        failed_component=run.failed_component,
     )
 
 

@@ -4,7 +4,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.claude.agent_client import ClaudeAgentClient
+from app.groq_provider.agent_client import GroqAgentClient
 from sqlalchemy.orm import Session
 
 from app.agent.models import AgentState, AgentTask, ToolResult
@@ -35,7 +35,7 @@ class BaseTool(ABC):
     name: str = "base_tool"
     description: str = "Base tool"
 
-    def __init__(self, client: ClaudeAgentClient, settings: Settings) -> None:
+    def __init__(self, client: GroqAgentClient, settings: Settings) -> None:
         self.client = client
         self.settings = settings
 
@@ -59,7 +59,7 @@ class BaseTool(ABC):
     ) -> Tuple[str, str, str]:
         """
         Return (formatted_text, document_name, document_type) for one document.
-        Formats each page with a [Page N] header for Claude's reference.
+        Formats each page with a [Page N] header for the model's reference.
         """
         repo = DocumentRepository(db)
         chunks: List[PageChunk] = repo.get_page_chunks(doc_id)
@@ -114,7 +114,7 @@ class BaseTool(ABC):
         Run (or reuse the cached result of) the single Clinical Knowledge
         Extraction Engine call for this document set (STEP 3 / STEP 5).
 
-        May raise ClaudeUnavailableError — callers should catch it the same
+        May raise GroqUnavailableError — callers should catch it the same
         way they handle their own direct generate_content() calls.
         """
         engine = get_extraction_engine()
@@ -145,16 +145,16 @@ class BaseTool(ABC):
     def _count_tokens(self, text: str) -> int:
         return len(text) // 4  # Rough estimate
 
-    def _claude_unavailable_result(self, task: AgentTask, state: AgentState, exc: Exception) -> ToolResult:
+    def _groq_unavailable_result(self, task: AgentTask, state: AgentState, exc: Exception) -> ToolResult:
         """
-        Claude was unavailable after all retries. Flag the run for manual
+        Groq was unavailable after all retries. Flag the run for manual
         review (so a human catches the gap) without crashing or stopping
         the agent loop.
         """
-        reason = f"{self.name}: Claude unavailable, manual review required ({exc})"
+        reason = f"{self.name}: Groq unavailable, manual review required ({exc})"
         if reason not in state.escalation_reasons:
             state.escalation_reasons.append(reason)
-        return self._empty_result(task, f"Claude unavailable: {exc}")
+        return self._empty_result(task, f"Groq unavailable: {exc}")
 
     def _empty_result(self, task: AgentTask, reason: str) -> ToolResult:
         return ToolResult(

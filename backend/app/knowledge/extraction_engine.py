@@ -18,8 +18,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from app.claude.agent_client import ClaudeAgentClient
-from app.claude.cache import get_claude_response_cache
+from app.groq_provider.agent_client import GroqAgentClient
+from app.groq_provider.cache import get_groq_response_cache
 from app.knowledge.prompts import EXTRACTION_SYSTEM_PROMPT
 from app.utils.json_parsing import parse_json_response
 
@@ -252,14 +252,14 @@ class ExtractionResult:
 
 class ClinicalKnowledgeExtractionEngine:
     """
-    Runs ONE Claude call to extract every clinical category from a document
+    Runs ONE Groq call to extract every clinical category from a document
     set, caching the structured result by SHA256(document_text).
     """
 
     def __init__(self) -> None:
-        self._cache = get_claude_response_cache()
+        self._cache = get_groq_response_cache()
 
-    async def extract(self, document_text: str, client: ClaudeAgentClient) -> ExtractionResult:
+    async def extract(self, document_text: str, client: GroqAgentClient) -> ExtractionResult:
         content_hash = self._cache.hash_content(document_text)
 
         cached = self._cache.get(content_hash)

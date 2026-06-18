@@ -114,3 +114,13 @@ class AuditLogger:
             patient_id=patient_id,
             mrn=mrn,
         )
+
+    def log(self, event: str, **kwargs) -> None:
+        """
+        Generic audit event for callers that don't have a dedicated
+        log_*() method (e.g. safety/engine.py, summary/generator.py,
+        services/summary_service.py). Without this, every audit.log(...)
+        call in those modules raised AttributeError, which silently
+        aborted summary generation before it could ever reach db.commit().
+        """
+        self._logger.info(event, event=event, **kwargs)

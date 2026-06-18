@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { FlagSeverity, SafetyStatus, SummaryStatus, AgentRunStatus, DocumentStatus, ClaudeStatus } from "@/lib/types";
+import type { FlagSeverity, SafetyStatus, SummaryStatus, AgentRunStatus, DocumentStatus, ClaudeStatus, GroqStatus, LLMStatus } from "@/lib/types";
 
 type BadgeVariant =
   | "critical"
@@ -148,6 +148,40 @@ export function ClaudeStatusBadge({ status }: { status: ClaudeStatus["status"] }
     connected: "Connected",
     degraded: "Degraded",
     not_configured: "Not Configured",
+  };
+  return (
+    <Badge variant={map[status]} dot>
+      {labels[status]}
+    </Badge>
+  );
+}
+
+export function GroqStatusBadge({ status }: { status: GroqStatus["status"] }) {
+  const map: Record<GroqStatus["status"], BadgeVariant> = {
+    connected: "success",
+    degraded: "warning",
+    not_configured: "critical",
+  };
+  const labels: Record<GroqStatus["status"], string> = {
+    connected: "Connected",
+    degraded: "Degraded",
+    not_configured: "Not Configured",
+  };
+  return (
+    <Badge variant={map[status]} dot>
+      {labels[status]}
+    </Badge>
+  );
+}
+
+export function LLMStatusBadge({ status }: { status: LLMStatus["status"] }) {
+  const map: Record<LLMStatus["status"], BadgeVariant> = {
+    healthy: "success",
+    failed: "critical",
+  };
+  const labels: Record<LLMStatus["status"], string> = {
+    healthy: "Groq Connected ✅",
+    failed: "Groq Authentication Failed ❌",
   };
   return (
     <Badge variant={map[status]} dot>

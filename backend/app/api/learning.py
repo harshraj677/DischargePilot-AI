@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from app.claude.agent_client import ClaudeAgentClient, get_claude_agent_client
+from app.groq_provider.agent_client import GroqAgentClient, get_groq_agent_client
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -26,14 +26,14 @@ from app.utils.logging import get_logger
 logger = get_logger(__name__)
 router = APIRouter(prefix="/learning", tags=["Learning"])
 
-_claude_client: Optional[ClaudeAgentClient] = None
+_groq_client: Optional[GroqAgentClient] = None
 
 
-def _get_client() -> ClaudeAgentClient:
-    global _claude_client
-    if _claude_client is None:
-        _claude_client = get_claude_agent_client()
-    return _claude_client
+def _get_client() -> GroqAgentClient:
+    global _groq_client
+    if _groq_client is None:
+        _groq_client = get_groq_agent_client()
+    return _groq_client
 
 
 # ── Response Models ───────────────────────────────────────────────────────────

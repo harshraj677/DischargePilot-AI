@@ -131,8 +131,8 @@ def classify_by_rules(text: str) -> ClassificationResult:
 
 async def classify_by_llm(text: str, filename: str) -> ClassificationResult:
     try:
-        from app.claude.agent_client import get_claude_agent_client
-        client = get_claude_agent_client()
+        from app.groq_provider.agent_client import get_groq_agent_client
+        client = get_groq_agent_client()
 
         sample = text[:3000]
         valid_types = [t.value for t in DocumentType if t != DocumentType.UNKNOWN]

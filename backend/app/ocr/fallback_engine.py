@@ -20,6 +20,7 @@ from app.ocr.models import (
 from app.ocr.providers import (
     OCRProvider,
     ClaudeVisionOCR,
+    GroqVisionOCR,
     EasyOCRProvider,
     TesseractOCRProvider,
 )
@@ -47,14 +48,15 @@ class OCRFallbackEngine:
     
     # Provider priority order (can be configured)
     DEFAULT_PROVIDER_PRIORITY = [
-        "claude",     # Primary - best for medical
-        "easyocr",    # Fallback 1 - lightweight
-        "tesseract",  # Fallback 2 - reliable
+        "groq",       # Primary - best for medical
+        "claude",     # Fallback 1 - secondary AI vision provider
+        "easyocr",    # Fallback 2 - lightweight
+        "tesseract",  # Fallback 3 - reliable
     ]
 
     def __init__(
         self,
-        primary_provider: str = "claude",
+        primary_provider: str = "groq",
         fallback_providers: Optional[List[str]] = None,
         enable_fallback: bool = True,
         enable_optimization: bool = True,
@@ -107,6 +109,12 @@ class OCRFallbackEngine:
     
     def _initialize_providers(self) -> None:
         """Initialize available OCR providers."""
+        try:
+            self.providers["groq"] = GroqVisionOCR()
+            logger.info("Groq Vision OCR initialized")
+        except Exception as e:
+            logger.warning("Failed to initialize Groq Vision OCR", error=str(e))
+
         try:
             self.providers["claude"] = ClaudeVisionOCR()
             logger.info("Claude Vision OCR initialized")

@@ -19,6 +19,13 @@ class AgentRunStatus(str, Enum):
     TIMED_OUT = "TIMED_OUT"
 
 
+# Hard cap on how many times the loop will invoke AgentPlanner.replan() in a
+# single run — without this, a tool that keeps reporting the same findings
+# (or an LLM replanner that keeps proposing tasks) can re-trigger replanning
+# every iteration and never reach termination.
+MAX_REPLAN_ATTEMPTS = 5
+
+
 class TaskStatus(str, Enum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -32,7 +39,7 @@ class AgentTask(BaseModel):
     name: str
     tool_name: str
     description: str = ""
-    priority: int = Field(default=5, ge=1, le=10)
+    priority: int = Field(default=5, ge=1, le=12)
     status: TaskStatus = TaskStatus.PENDING
     depends_on: List[str] = Field(default_factory=list)
     document_ids: List[str] = Field(default_factory=list)
@@ -70,6 +77,10 @@ class AgentState(BaseModel):
     escalation_required: bool = False
     escalation_reasons: List[str] = Field(default_factory=list)
 
+    # Replan-loop guards (see MAX_REPLAN_ATTEMPTS)
+    replan_count: int = 0
+    replanned_triggers: List[str] = Field(default_factory=list)
+
     status: AgentRunStatus = AgentRunStatus.RUNNING
     termination_reason: Optional[str] = None
 
@@ -92,18 +103,42 @@ class AgentState(BaseModel):
         self.tool_history.append(task.tool_name)
 
     def mark_task_failed(self, task: AgentTask, error: str) -> None:
+        # ExecutionEngine.execute() already retries internally up to
+        # task.max_attempts times (with backoff) inside a single execute()
+        # call, and only calls mark_task_failed() once those retries are
+        # exhausted — but it only calls mark_task_in_progress() (which
+        # increments task.attempts) once per execute() call. So
+        # task.attempts is always 1 here, never >= max_attempts, and the
+        # old `if task.attempts >= task.max_attempts` guard silently left
+        # every permanently-failed task sitting in pending_tasks forever —
+        # which then blocks anything depending on it from ever becoming
+        # ready. By the time this method runs, the task is always done
+        # (no further automatic retries are coming), so always remove it.
         task.status = TaskStatus.FAILED
         task.completed_at = datetime.utcnow()
         task.error = error
-        if task.attempts >= task.max_attempts:
-            self.pending_tasks = [t for t in self.pending_tasks if t.task_id != task.task_id]
-            self.failed_tasks.append(task)
+        self.pending_tasks = [t for t in self.pending_tasks if t.task_id != task.task_id]
+        self.failed_tasks.append(task)
 
     def completed_task_names(self) -> List[str]:
         return [t.tool_name for t in self.completed_tasks]
 
     def has_completed(self, tool_name: str) -> bool:
         return tool_name in self.completed_task_names()
+
+    def has_task(self, tool_name: str) -> bool:
+        """
+        True if a task for this tool already exists anywhere in the run
+        (pending, completed, or failed). Centralized duplicate-task guard —
+        every code path that adds tasks (initial plan, replanning, forced
+        finalization) must check this before scheduling a tool, otherwise
+        the same tool can be scheduled twice under independent code paths.
+        """
+        return (
+            any(t.tool_name == tool_name for t in self.pending_tasks)
+            or any(t.tool_name == tool_name for t in self.completed_tasks)
+            or any(t.tool_name == tool_name for t in self.failed_tasks)
+        )
 
     def is_task_ready(self, task: AgentTask) -> bool:
         """Return True if all dependencies are satisfied."""

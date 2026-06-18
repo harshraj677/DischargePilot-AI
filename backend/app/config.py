@@ -29,7 +29,15 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE_MB: int = 50
     ALLOWED_EXTENSIONS: List[str] = [".pdf", ".jpg", ".jpeg", ".png", ".webp"]
 
-    # Anthropic Claude API (single AI provider for the whole platform)
+    # Groq API (primary AI provider for the whole platform)
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_VISION_MODEL: str = "meta-llama/llama-4-scout-17b-16e-instruct"
+    GROQ_MAX_RETRIES: int = 3
+    GROQ_RETRY_BASE_DELAY: float = 2.0
+    GROQ_CACHE_ENABLED: bool = True
+
+    # Anthropic Claude API (secondary OCR fallback provider)
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_VISION_MODEL: str = "claude-opus-4-8"
     ANTHROPIC_TEXT_MODEL: str = "claude-sonnet-4-6"
@@ -44,13 +52,13 @@ class Settings(BaseSettings):
     EXTRACTION_TIMEOUT_SECONDS: int = 60
     MIN_PAGE_TEXT_LENGTH: int = 10
 
-    # OCR (Claude Vision is the primary provider for scanned/image-only PDFs,
-    # with EasyOCR/Tesseract as fallbacks)
+    # OCR (Groq Vision is the primary provider for scanned/image-only PDFs,
+    # with Claude Vision, EasyOCR, and Tesseract as fallbacks)
     OCR_ENABLED: bool = True
-    OCR_PRIMARY_PROVIDER: str = "claude"
+    OCR_PRIMARY_PROVIDER: str = "groq"
 
     # Agent
-    AGENT_MAX_ITERATIONS: int = 15
+    AGENT_MAX_ITERATIONS: int = 20
     AGENT_TOOL_TIMEOUT_SECONDS: int = 120
 
     # Logging
