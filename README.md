@@ -1,24 +1,27 @@
 # DischargePilot AI
 
-**An agentic AI system that generates evidence-grounded hospital discharge summaries from unstructured clinical documents, with a multi-layer clinical safety engine.**
+**An agentic AI system that generates evidence-grounded hospital discharge summaries from unstructured clinical documents, backed by a multi-layer clinical safety engine.**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111+-green.svg)](https://fastapi.tiangolo.com)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org)
-[![Claude](https://img.shields.io/badge/Claude-claude--sonnet--4--6-orange.svg)](https://anthropic.com)
+[![Groq](https://img.shields.io/badge/Groq-llama--3.3--70b-orange.svg)](https://groq.com)
+[![Claude](https://img.shields.io/badge/Claude-Sonnet%204.6%20(OCR%20fallback)-6b4fbb.svg)](https://anthropic.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
 ## Problem Statement
 
-Hospital discharge summaries are critical clinical documents — but 70% of hospital readmissions within 30 days are linked to documentation gaps at discharge. Physicians spend 2-3 hours per patient manually synthesizing information from admission notes, lab reports, medication records, and consult notes.
+Hospital discharge summaries are critical clinical documents — yet 70% of 30-day hospital readmissions are linked to documentation gaps at discharge. Physicians routinely spend 2–3 hours per patient manually synthesizing information scattered across admission notes, lab reports, medication records, and consult notes.
 
-**DischargePilot AI automates this synthesis** using an agentic AI pipeline that:
-- Extracts structured clinical knowledge from unstructured documents (native PDF text AND scanned images)
-- Processes scanned hospital documents, image-based clinical reports, and handwritten notes via OCR
+**DischargePilot AI automates this synthesis** with an agentic AI pipeline that:
+
+- Extracts structured clinical knowledge from unstructured documents (native PDF text **and** scanned images)
+- Processes scanned hospital documents, image-based clinical reports, and handwritten notes via multi-provider OCR
 - Detects medication conflicts, drug interactions, and diagnosis contradictions
-- Validates every generated fact against source documents (zero fabrication tolerance)
+- Validates every generated fact against source documents — zero fabrication tolerance
+- Runs a second, LLM-driven clinical documentation QA pass that catches missing data, pending results, and guideline-aware medication issues while explicitly minimizing false positives and alert fatigue
 - Surfaces all pending lab results and flags them for clinician review
 - Learns from physician edits to improve over time
 
@@ -27,37 +30,38 @@ Hospital discharge summaries are critical clinical documents — but 70% of hosp
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    DischargePilot AI Platform                    │
-│                                                                  │
-│  Frontend (Next.js 15)          Backend (FastAPI + Python)       │
-│  ┌──────────────────┐           ┌──────────────────────────┐    │
-│  │ Patient Dashboard│◄─REST────►│ API Layer (6 routers)    │    │
-│  │ Agent Trace View │           │ Service Layer (7 svcs)   │    │
-│  │ Safety Report    │           │ ┌──────────────────────┐ │    │
-│  │ Summary Editor   │           │ │  OCR MODULE          │ │    │
-│  │ Learning Panel   │           │ │  Page Classifier     │ │    │
-│  │ Analytics Board  │           │ │  Multi-Provider OCR  │ │    │
-│  └──────────────────┘           │ │  Safety Validator    │ │    │
-│                                 │ ├──────────────────────┤ │    │
-│                                 │ │  AGENT ENGINE        │ │    │
-│                                 │ │  Planner (Claude)    │ │    │
-│                                 │ │  11 Clinical Tools   │ │    │
-│                                 │ │  Decision Engine     │ │    │
-│                                 │ │  Trace Recorder      │ │    │
-│                                 │ ├──────────────────────┤ │    │
-│                                 │ │  SAFETY ENGINE       │ │    │
-│                                 │ │  5 Validators        │ │    │
-│                                 │ ├──────────────────────┤ │    │
-│                                 │ │  LEARNING SYSTEM     │ │    │
-│                                 │ │  RLHF + Memory       │ │    │
-│                                 │ └──────────────────────┘ │    │
-│                                 │  SQLite + SQLAlchemy     │    │
-│                                 └──────────────────────────┘    │
-│                                          │                      │
-│                                    Anthropic API                 │
-│                              (Claude for OCR + Planning)         │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                       DischargePilot AI Platform                      │
+│                                                                        │
+│  Frontend (Next.js 15)            Backend (FastAPI + Python 3.11)     │
+│  ┌───────────────────┐            ┌───────────────────────────────┐  │
+│  │ Patient Dashboard  │◄──REST────►│ API Layer (7 routers)         │  │
+│  │ Agent Trace View   │            │ Service Layer                 │  │
+│  │ Safety Report      │            │ ┌───────────────────────────┐ │  │
+│  │ Summary Editor     │            │ │  OCR MODULE                │ │  │
+│  │ Learning Panel     │            │ │  Page Classifier            │ │  │
+│  │ Analytics Board    │            │ │  Multi-Provider OCR         │ │  │
+│  └───────────────────┘            │ │  Safety Validator           │ │  │
+│                                    │ ├───────────────────────────┤ │  │
+│                                    │ │  AGENT ENGINE               │ │  │
+│                                    │ │  Planner (Groq)              │ │  │
+│                                    │ │  11 Clinical Tools           │ │  │
+│                                    │ │  Decision Engine             │ │  │
+│                                    │ │  Trace Recorder              │ │  │
+│                                    │ ├───────────────────────────┤ │  │
+│                                    │ │  SAFETY ENGINE               │ │  │
+│                                    │ │  5 Deterministic Validators  │ │  │
+│                                    │ │  + LLM Clinical Reviewer     │ │  │
+│                                    │ ├───────────────────────────┤ │  │
+│                                    │ │  LEARNING SYSTEM             │ │  │
+│                                    │ │  RLHF + Correction Memory    │ │  │
+│                                    │ └───────────────────────────┘ │  │
+│                                    │  SQLite + SQLAlchemy           │  │
+│                                    └───────────────────────────────┘  │
+│                                              │                         │
+│                                    Groq API (primary)                 │
+│                              Anthropic Claude API (OCR fallback)      │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -68,42 +72,48 @@ Hospital discharge summaries are critical clinical documents — but 70% of hosp
 Patient Documents (PDF, Scanned, Images)
         │
         ▼
-┌─────────────────────────────────┐
-│ OCR & PDF Processing            │
-│ • Page Classification            │
-│ • Native text extraction         │
-│ • Image OCR (Claude Vision)      │
-│ • Handwriting detection          │
-│ • Multi-provider fallback        │
-│ • Safety validation              │
-└────────────────────┬─────────────┘
-                     ▼
-┌─────────────────────────────────┐
-│ PDF Text + OCR Results          │  Combined text with confidence scoring
-└────────────────────┬─────────────┘
-                     ▼
+┌───────────────────────────────────┐
+│ OCR & PDF Processing               │
+│ • Page classification              │
+│ • Native text extraction           │
+│ • Image OCR (Groq Vision, primary) │
+│ • Claude Vision (OCR fallback)     │
+│ • Handwriting detection            │
+│ • Multi-provider fallback chain    │
+│ • Safety validation                │
+└──────────────────┬──────────────────┘
+                   ▼
+┌───────────────────────────────────┐
+│ Combined Text + Confidence Scores  │
+└──────────────────┬──────────────────┘
+                   ▼
 ┌─────────────────┐
-│ Agent Planner   │  Claude generates dependency-ordered task graph
-└────────┬────────┘
+│ Agent Planner    │  Groq generates a dependency-ordered task graph
+└────────┬─────────┘
          ▼
-┌─────────────────────────────────────────────────────┐
-│        AGENT EXECUTION LOOP (max 15 iterations)     │
-│  Tool Selector → Tool Executor → Decision Engine    │
-│  diagnosis | medication | allergy | lab | procedure │
-│  conflict | drug_interaction | medication_recon     │
-│  pending_results | escalation_manager               │
-└────────────────────┬────────────────────────────────┘
-                     ▼
-┌─────────────────────────────────────────────────────┐
-│            SAFETY VALIDATION ENGINE                  │
-│  Evidence → Conflict → Medication → Completeness    │
-│  → Pending → APPROVED / REVIEW_REQUIRED / BLOCKED   │
-└────────────────────┬────────────────────────────────┘
-                     ▼
-┌─────────────────┐    ┌─────────────────┐
-│ Summary         │    │ Learning System │
-│ Generator       │───►│ RLHF + Memory   │
-└─────────────────┘    └─────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│           AGENT EXECUTION LOOP (max 20 iterations)         │
+│  Tool Selector → Tool Executor → Decision Engine            │
+│  diagnosis → medication → allergy → procedure → lab        │
+│  → pending_result → conflict_detector → medication_recon   │
+│  → drug_interaction_checker → escalation_manager            │
+│  → summary_generator → terminator                           │
+│                                                              │
+│  Escalation never bypasses summary generation — every run   │
+│  (COMPLETED or ESCALATED) produces a persisted summary.     │
+└──────────────────┬───────────────────────────────────────────┘
+                   ▼
+┌───────────────────────────────────────────────────────────┐
+│                  SAFETY VALIDATION ENGINE                  │
+│  Evidence → Conflict → Medication → Completeness → Pending  │
+│  + LLM Clinical Reviewer (evidence-gated, alert-fatigue-aware)│
+│  → APPROVED / REVIEW_REQUIRED / BLOCKED                      │
+└──────────────────┬───────────────────────────────────────────┘
+                   ▼
+┌──────────────────┐    ┌───────────────────┐
+│ Discharge Summary │───►│ Learning System    │
+│ Generator + Save  │    │ RLHF + Memory       │
+└──────────────────┘    └───────────────────┘
 ```
 
 ---
@@ -112,18 +122,18 @@ Patient Documents (PDF, Scanned, Images)
 
 | Layer | Technology | Purpose |
 |-------|------------|---------|
-| **AI Model** | Claude claude-sonnet-4-6 (Anthropic) | Clinical extraction, summary generation, OCR |
+| **AI Model — Primary** | Groq (`llama-3.3-70b-versatile`) | Planning, clinical extraction, summary generation, vision OCR |
+| **AI Model — OCR Fallback** | Anthropic Claude (Sonnet 4.6 / Opus 4.8) | Secondary OCR provider when Groq is unavailable |
 | **Backend** | FastAPI (Python 3.11+) | REST API, async processing |
-| **Database** | SQLite + SQLAlchemy | Patient data, documents, summaries |
+| **Database** | SQLite + SQLAlchemy | Patients, documents, agent runs, discharge reports |
 | **PDF Processing** | PyMuPDF (fitz) | Text extraction with page indexing |
-| **OCR - Primary** | Claude Vision API (Anthropic) | Medical document OCR, handwriting support |
-| **OCR - Fallback** | EasyOCR | Lightweight secondary OCR provider |
-| **OCR - Fallback** | Tesseract OCR | Reliable tertiary OCR provider |
+| **OCR — Primary** | Groq Vision (`llama-4-scout`) | Medical document OCR, handwriting support |
+| **OCR — Fallback** | Claude Vision, EasyOCR, Tesseract | Multi-tier fallback chain |
 | **Image Processing** | Pillow (PIL) + OpenCV | Image optimization and conversion |
 | **Frontend** | Next.js 15, React 19, TypeScript | Clinical dashboard SPA |
 | **UI** | Tailwind CSS, Radix UI, shadcn/ui | Healthcare design system |
 | **Charts** | Recharts | Analytics visualizations |
-| **Testing** | pytest, pytest-asyncio, FastAPI TestClient | Unit + integration + OCR tests |
+| **Testing** | pytest, pytest-asyncio, FastAPI TestClient | Unit, integration, and OCR test suites |
 | **Containerization** | Docker, Docker Compose | Deployment |
 
 ---
@@ -132,45 +142,55 @@ Patient Documents (PDF, Scanned, Images)
 
 ### 11 Specialized Clinical Tools
 
-| Tool | Function | Dependencies |
-|------|----------|-------------|
-| `diagnosis_extractor` | Extract diagnoses with ICD codes | None |
-| `medication_extractor` | Extract admission medications | None |
-| `allergy_extractor` | Extract allergies with severity | None |
-| `lab_extractor` | Extract lab results + critical flags | lab_report docs |
-| `procedure_extractor` | Extract procedures performed | None |
-| `conflict_detector` | Detect clinical contradictions | diagnosis, medication, allergy |
-| `drug_interaction_checker` | CYP450 + contraindication check | medication |
-| `medication_reconciliation` | Admission vs discharge diff | medication |
-| `pending_result_detector` | Find pending labs and studies | lab |
-| `escalation_manager` | Evaluate need for physician review | conflict_detector |
+| Tool | Function | Depends On |
+|------|----------|-----------|
+| `diagnosis_extractor` | Extract diagnoses with ICD codes | — |
+| `medication_extractor` | Extract admission/discharge medications | — |
+| `allergy_extractor` | Extract allergies with severity and NKDA status | — |
+| `procedure_extractor` | Extract procedures performed | — |
+| `lab_extractor` | Extract lab results and flag critical values | lab_report docs |
+| `pending_result_extractor` | Find pending labs and studies awaiting follow-up | — |
+| `conflict_detector` | Detect clinical contradictions across facts | diagnosis, medication, allergy |
+| `medication_reconciler` | Diff admission vs. discharge medications | medication |
+| `drug_interaction_checker` | Drug–drug interaction and contraindication check | medication |
+| `escalation_manager` | Evaluate whether physician escalation is required | conflict_detector, medication_reconciler |
+| `summary_generator` | Generate and persist the structured discharge summary | the full pipeline above, including escalation_manager |
 
 ### Planning → Execution → Decision
 
-The Planner generates a dependency-ordered task graph. The ToolSelector picks the highest-priority ready task. The Decision Engine evaluates results and can trigger replanning or escalation.
+The **Planner** generates a dependency-ordered task graph. The **Tool Selector** picks the highest-priority ready task each iteration. The **Decision Engine** evaluates each result and can trigger bounded replanning. The **Termination Controller** guarantees the loop always reaches `summary_generator` — even on escalation or a stalled dependency — before reporting `COMPLETED`, `ESCALATED`, or `TIMED_OUT`.
 
 ---
 
 ## Safety Architecture
 
-### 5-Layer Safety Validation
+### 6-Layer Safety Validation
 
 ```
-Layer 1: EvidenceValidator  → No fabrication (evidence required per fact)
-Layer 2: ConflictValidator  → Unresolved conflicts detected
-Layer 3: MedicationValidator → Allergy-drug cross-reference
-Layer 4: CompletenessValidator → Required clinical fields present
-Layer 5: PendingResultValidator → All pending results surfaced
+Layer 1: EvidenceValidator        → No fabrication — evidence required per fact
+Layer 2: ConflictValidator        → Unresolved clinical conflicts detected
+Layer 3: MedicationValidator      → Allergy–drug cross-reference, high-risk dosing
+Layer 4: CompletenessValidator    → Required clinical fields present
+Layer 5: PendingResultValidator   → All pending results surfaced
+Layer 6: LLM Clinical Reviewer    → Evidence-gated QA pass for missing data, pending
+                                     results, medication discrepancies, and
+                                     guideline-aware conflict detection — tuned to
+                                     minimize false positives and alert fatigue
 ```
+
+The LLM Clinical Reviewer (`app/safety/llm_reviewer.py`) runs alongside — not instead of — the deterministic validators. Its findings feed into the same aggregate safety score and flag pool. Every finding it produces must cite explicit evidence (source record, lab value, medication, or guideline); findings without evidence are dropped before they ever reach a clinician. Only `HIGH` severity **and** `High` confidence findings require acknowledgment before a summary can be approved.
 
 ### Safety Score Formula
+
 ```
-safety_score = max(0.0, 1.0 − (critical × 0.30) − (high × 0.10))
+safety_score = max(0.0, 1.0 − (critical_count × 0.30) − (high_count × 0.10))
 
 BLOCKED         → critical_count > 0
-REVIEW_REQUIRED → high_count > 0 or flags exist
+REVIEW_REQUIRED → high_count > 0 or review flags exist
 APPROVED        → all clear
 ```
+
+A `BLOCKED` or `ESCALATED` status never prevents the discharge summary from being generated — it is always produced, with the relevant findings attached as review flags requiring clinician sign-off.
 
 ---
 
@@ -178,31 +198,31 @@ APPROVED        → all clear
 
 Learns from physician feedback to improve summary quality over time:
 
-- **Edit Distance Tracking** — Measures how much the doctor had to change
-- **Correction Memory** — Stores frequent abbreviation expansions as prompt hints
-- **Strategy Engine (UCB)** — Selects best prompt variant based on reward history
-- **Reward Formula**: `R = 0.5×(1−edit_dist) + 0.3×section_accuracy + 0.2×(1−burden)`
+- **Edit Distance Tracking** — measures how much the doctor had to change
+- **Correction Memory** — stores frequent abbreviation expansions as prompt hints
+- **Strategy Engine (UCB)** — selects the best prompt variant based on reward history
+- **Reward Formula** — `R = 0.5×(1−edit_dist) + 0.3×section_accuracy + 0.2×(1−burden)`
 
 ---
 
 ## Installation
 
 ### Prerequisites
-- Python 3.11+, Node.js 18+, Anthropic API key
+
+- Python 3.11+, Node.js 18+
+- A [Groq API key](https://console.groq.com) (primary AI provider, free tier available)
+- An [Anthropic API key](https://console.anthropic.com) (optional — used only as the OCR fallback provider)
 
 ### Backend
 
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env       # Add ANTHROPIC_API_KEY
+cp .env.example .env              # Add GROQ_API_KEY (and optionally ANTHROPIC_API_KEY)
 python -c "from app.db.database import engine; from app.db import models; models.Base.metadata.create_all(engine)"
-python -m pip install uvicorn
 uvicorn app.main:app --reload
-or 
-python -m uvicorn app.main:app --reload
 ```
 
 ### Frontend
@@ -210,15 +230,15 @@ python -m uvicorn app.main:app --reload
 ```bash
 cd frontend
 npm install
-cp .env.example .env.local  # Set NEXT_PUBLIC_API_URL=http://localhost:8000
-npm run dev                  # Open http://localhost:3000
+cp .env.example .env.local        # Set NEXT_PUBLIC_API_URL=http://localhost:8000
+npm run dev                       # Open http://localhost:3000
 ```
 
 ### Docker Compose
 
 ```bash
 docker-compose up --build
-# Backend: http://localhost:8000/docs
+# Backend:  http://localhost:8000/docs
 # Frontend: http://localhost:3000
 ```
 
@@ -229,11 +249,12 @@ docker-compose up --build
 ```bash
 cd backend
 pytest                              # All tests
-pytest tests/test_safety/          # Safety engine
-pytest tests/test_agent/           # Agent loop and tools
-pytest tests/test_learning/        # Learning system
-pytest tests/integration/          # End-to-end workflow
-pytest --cov=app --cov-report=html # Coverage report
+pytest tests/test_safety/           # Safety engine + LLM clinical reviewer
+pytest tests/test_agent/            # Agent loop and tools
+pytest tests/test_groq/             # Groq provider client, cache, rate limiter
+pytest tests/test_learning/         # Learning system
+pytest tests/integration/           # End-to-end workflow
+pytest --cov=app --cov-report=html  # Coverage report
 ```
 
 ### Evaluation Framework
@@ -255,13 +276,18 @@ Available at `http://localhost:8000/docs` (Swagger UI) and `http://localhost:800
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/v1/patients/` | Create patient |
-| `POST` | `/api/v1/documents/upload/{patient_id}` | Upload PDF document |
-| `POST` | `/api/v1/agent/run/{patient_id}` | Start agent execution |
-| `GET` | `/api/v1/agent/trace/{run_id}` | Get execution trace |
-| `POST` | `/api/v1/summary/generate/{patient_id}/{run_id}` | Generate summary |
-| `PUT` | `/api/v1/summary/{summary_id}/review` | Submit doctor review |
+| `POST` | `/api/v1/patients` | Create patient |
+| `POST` | `/api/v1/patients/{patient_id}/documents` | Upload a clinical document |
+| `POST` | `/api/v1/agent/patients/{patient_id}/runs` | Start an agent run |
+| `GET` | `/api/v1/agent/runs/{run_id}/trace` | Get the full execution trace |
+| `GET` | `/api/v1/agent/runs/{run_id}/knowledge-base` | Inspect the extracted knowledge base |
+| `GET` | `/api/v1/summary/patients/{patient_id}/runs/{run_id}/safety` | Get the safety report |
+| `POST` | `/api/v1/summary/patients/{patient_id}/runs/{run_id}/generate` | Generate the discharge summary |
+| `GET` | `/api/v1/summary/patients/{patient_id}/runs/{run_id}/summary` | Retrieve the persisted summary |
+| `POST` | `/api/v1/summary/patients/{patient_id}/runs/{run_id}/summary/approve` | Approve the summary |
+| `POST` | `/api/v1/summary/patients/{patient_id}/runs/{run_id}/summary/reject` | Reject the summary |
 | `GET` | `/api/v1/learning/metrics` | Learning system metrics |
+| `GET` | `/api/v1/system/llm-status` | Provider health (Groq + Claude) |
 
 ---
 
@@ -296,47 +322,39 @@ Available at `http://localhost:8000/docs` (Swagger UI) and `http://localhost:800
 dischargepilot-ai/
 ├── backend/
 │   ├── app/
-│   │   ├── agent/          # Agent engine + 11 clinical tools
-│   │   ├── ocr/            # OCR module (12 components, 3500+ lines)
-│   │   │   ├── models/     # OCR data models
-│   │   │   ├── providers/  # Claude, EasyOCR, Tesseract implementations
-│   │   │   ├── page_classifier.py         # Page type detection
-│   │   │   ├── image_extractor.py         # PDF → Image rendering
-│   │   │   ├── fallback_engine.py         # Multi-provider orchestration
-│   │   │   ├── handwriting_processor.py   # Handwriting with confidence scoring
-│   │   │   ├── orchestrator.py            # Complete pipeline orchestration
-│   │   │   ├── safety_validator.py        # Clinical safety validation
-│   │   │   └── integration.py             # Integration with PDF extractor
-│   │   ├── safety/         # Safety engine + 5 validators
-│   │   ├── knowledge/      # Patient Knowledge Repository (Enhanced with OCR metadata)
-│   │   ├── learning/       # RLHF learning system
-│   │   ├── processing/     # PDF pipeline
-│   │   ├── summary/        # Summary generator
-│   │   └── observability/  # Metrics + audit logging
+│   │   ├── agent/             # Agent loop, planner, executor, terminator + 11 clinical tools
+│   │   ├── groq_provider/     # Groq client, caching, rate limiting, health checks
+│   │   ├── ocr/                # OCR module
+│   │   │   ├── providers/      # groq, claude, easyocr, tesseract implementations
+│   │   │   ├── page_classifier.py
+│   │   │   ├── image_extractor.py
+│   │   │   ├── fallback_engine.py
+│   │   │   ├── handwriting_processor.py
+│   │   │   ├── orchestrator.py
+│   │   │   └── safety_validator.py
+│   │   ├── safety/             # 5 deterministic validators + LLM clinical reviewer
+│   │   ├── knowledge/           # Patient knowledge repository
+│   │   ├── learning/            # RLHF learning system
+│   │   ├── processing/          # PDF / document pipeline
+│   │   ├── summary/             # Discharge summary generator
+│   │   └── api/                 # 7 routers (patients, documents, agent, summary, learning, system, debug)
 │   └── tests/
-│       ├── test_ocr/       # OCR test suite (5 modules, 800+ lines)
-│       ├── test_agent/     # Agent tests
-│       ├── test_safety/    # Safety tests
-│       ├── test_learning/  # Learning system tests
-│       └── integration/    # End-to-end tests
+│       ├── test_groq/           # Groq provider tests
+│       ├── test_ocr/            # OCR test suite
+│       ├── test_agent/          # Agent loop and tool tests
+│       ├── test_safety/         # Safety engine + LLM reviewer tests
+│       ├── test_learning/       # Learning system tests
+│       └── integration/         # End-to-end workflow tests
 ├── frontend/
-│   └── src/app/            # 8 clinical dashboard pages
+│   └── src/app/                 # 11 clinical dashboard pages
 ├── evaluation/
-│   ├── scenarios/          # 6 clinical test scenarios (JSON)
-│   ├── metrics.py          # All evaluation metrics
-│   ├── runner.py           # Scenario runner
-│   ├── report_generator.py # Automated reports
-│   └── clinical_safety_eval.py # Safety validation
-├── docs/
-│   ├── 01-19/              # Original architecture docs
-│   ├── 20_OCR_VISION_ENHANCEMENT_GUIDE.md      # OCR integration guide (400 lines)
-│   ├── 21_OCR_IMPLEMENTATION_SUMMARY.md        # OCR architecture overview (300 lines)
-│   ├── 22_OCR_QUICK_REFERENCE.md               # OCR API reference (400 lines)
-│   ├── 23_OCR_DELIVERY_SUMMARY.md              # OCR project summary (400 lines)
-│   └── 24_OCR_DOCUMENTATION_INDEX.md           # OCR documentation index (300 lines)
-├── scripts/                # Setup and utility scripts
+│   ├── scenarios/                # 6 clinical test scenarios (JSON)
+│   ├── metrics.py
+│   ├── runner.py
+│   ├── report_generator.py
+│   └── clinical_safety_eval.py
+├── docs/                         # Architecture, design, and migration documentation
 ├── docker-compose.yml
-├── COMPLETION_SUMMARY.md   # OCR completion summary
 └── .env.example
 ```
 
@@ -344,60 +362,49 @@ dischargepilot-ai/
 
 ## Limitations
 
-1. **Demo Data Only** — Uses simulated patients; real deployment needs HIPAA infrastructure
-2. **Sequential Execution** — Agent tools run sequentially (production: parallelize)
-3. **SQLite** — Development database; production requires PostgreSQL
-4. **English Only** — Optimized for English clinical documents
-5. **Drug Interactions** — Uses Claude knowledge, not a dedicated pharmacology database
-6. **OCR Confidence** — Handwritten content requires manual review for clinical safety
+1. **Demo Data Only** — uses simulated patients; real deployment requires HIPAA-compliant infrastructure
+2. **Sequential Execution** — agent tools run sequentially (production would parallelize independent extractors)
+3. **SQLite** — development database; production requires PostgreSQL
+4. **English Only** — optimized for English-language clinical documents
+5. **Drug Interactions** — uses LLM clinical knowledge, not a dedicated pharmacology database (e.g. DrugBank)
+6. **OCR Confidence** — handwritten content always requires manual clinician review
 
 ---
 
-## Features Added (OCR & Vision Enhancement)
+## OCR & Vision Capabilities
 
-### ✅ Multi-Document Format Support
+### Multi-Document Format Support
 - Native PDF text extraction
-- Scanned hospital documents (OCR required)
+- Scanned hospital documents
 - Image-based clinical reports
 - Embedded images within PDFs
 - Handwritten consultation notes
 
-### ✅ Multi-Provider OCR with Fallback
-- **Claude Vision** (primary) — Best for medical documents + handwriting support
-- **EasyOCR** (fallback) — Lightweight alternative
-- **Tesseract** (fallback) — Reliable backup
+### Multi-Provider OCR with Fallback
+- **Groq Vision** (primary) — fast, cost-effective medical document OCR
+- **Claude Vision** (fallback) — used when Groq is unavailable
+- **EasyOCR / Tesseract** (further fallbacks) — lightweight, reliable backups
 - Automatic provider selection based on confidence scoring
 
-### ✅ Clinical Safety for OCR
-- 3-tier safety levels: SAFE / CONDITIONAL / UNSAFE
+### Clinical Safety for OCR
+- Three-tier safety levels: SAFE / CONDITIONAL / UNSAFE
 - Confidence threshold validation
 - Clinical keyword detection (medications, allergies, contraindications)
-- Handwriting flagging (always requires manual review)
-- Complete evidence chain preservation
-- Zero fabrication guarantee
+- Handwriting always flagged for manual review
+- Complete evidence chain preservation — zero fabrication guarantee
 
-### ✅ Handwriting & Uncertainty Handling
-- Handwriting detection with confidence scoring
-- Uncertainty marking for OCR results
-- Manual review requirements for low-confidence extractions
-- Review report generation for clinical staff
-
-### ✅ OCR Integration Features
-- Backward compatible with existing PDF extractor
-- Enhanced EvidencedFact model tracks OCR source and confidence
-- Performance optimization (skips OCR for native text pages)
-- Comprehensive logging and tracing
+---
 
 ## Future Improvements
 
 - FHIR R4 EHR integration
 - WebSocket streaming execution
-- DrugBank / RxNorm integration
+- DrugBank / RxNorm integration for deterministic interaction checking
 - Parallel tool execution
 - Role-based access control (physician / nurse / admin)
 - Fine-tuned clinical language model
 - Additional OCR providers (Google Cloud Vision, Azure Form Recognizer)
-- Real-time OCR confidence monitoring dashboard
+- Real-time OCR and safety-score monitoring dashboard
 
 ---
 
@@ -407,5 +414,4 @@ MIT License — see [LICENSE](LICENSE)
 
 ---
 
-*DischargePilot AI — Built with Claude claude-sonnet-4-6 by Harsh Raj, 2025*
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+*DischargePilot AI — built by Harsh Raj.*
