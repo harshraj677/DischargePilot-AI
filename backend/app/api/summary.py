@@ -125,7 +125,7 @@ async def get_safety_report(
         )
 
     kb = _load_kb_from_run(agent_run)
-    safety_service = SafetyService(db)
+    safety_service = SafetyService(db, _get_client())
     report = await safety_service.validate_agent_run(patient_id, run_id, kb)
 
     return SafetyReportResponse(
@@ -174,7 +174,7 @@ async def generate_summary(
 
     # Safety validation result is still attached to the persisted summary
     # (review_flags, blocking_issues, safety_score) for clinician visibility.
-    safety_service = SafetyService(db)
+    safety_service = SafetyService(db, _get_client())
     safety_report = await safety_service.validate_agent_run(patient_id, run_id, kb)
 
     # Generate summary

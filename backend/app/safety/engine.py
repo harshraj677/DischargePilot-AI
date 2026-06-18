@@ -3,8 +3,10 @@ from __future__ import annotations
 from typing import List, Optional
 
 from app.agent.models import AgentRunResult
+from app.groq_provider.agent_client import GroqAgentClient
 from app.knowledge.repository import KnowledgeRepository
 from app.models.enums import SafetySeverity
+from app.safety.llm_reviewer import LLMClinicalSafetyReviewer
 from app.safety.models import (
     ReviewFlag,
     SafetyFinding,
@@ -53,17 +55,48 @@ class SafetyValidationEngine:
         kb: KnowledgeRepository,
         agent_result: Optional[AgentRunResult] = None,
     ) -> SafetyReport:
+        """Deterministic-only validation pass (no LLM call, synchronous)."""
         patient_id = kb.kb.patient_id
         run_id = agent_result.run_id if agent_result else "no-run"
 
         logger.info("Safety validation started", patient_id=patient_id, run_id=run_id)
 
-        # Run all validators
-        validation_results: List[ValidationResult] = []
-        for validator in self._validators:
-            result = validator.run(kb)
-            validation_results.append(result)
+        validation_results: List[ValidationResult] = [v.run(kb) for v in self._validators]
+        return self._build_report(kb, patient_id, run_id, validation_results)
 
+    async def validate_with_llm_review(
+        self,
+        kb: KnowledgeRepository,
+        client: GroqAgentClient,
+        agent_result: Optional[AgentRunResult] = None,
+    ) -> SafetyReport:
+        """
+        Same as validate(), plus an additional LLM-driven clinical
+        documentation QA pass (LLMClinicalSafetyReviewer) merged into the
+        same findings/flags pool — its findings count toward safety_score,
+        overall_status, and can_generate_summary exactly like a
+        deterministic validator's would. Never fails the whole report if
+        the LLM call fails: LLMClinicalSafetyReviewer.review() degrades to
+        an empty result rather than raising.
+        """
+        patient_id = kb.kb.patient_id
+        run_id = agent_result.run_id if agent_result else "no-run"
+
+        logger.info("Safety validation (with LLM review) started", patient_id=patient_id, run_id=run_id)
+
+        validation_results: List[ValidationResult] = [v.run(kb) for v in self._validators]
+        llm_result = await LLMClinicalSafetyReviewer(client).review(kb)
+        validation_results.append(llm_result)
+
+        return self._build_report(kb, patient_id, run_id, validation_results)
+
+    def _build_report(
+        self,
+        kb: KnowledgeRepository,
+        patient_id: str,
+        run_id: str,
+        validation_results: List[ValidationResult],
+    ) -> SafetyReport:
         # Aggregate all findings and flags
         all_findings: List[SafetyFinding] = []
         all_flags: List[ReviewFlag] = []

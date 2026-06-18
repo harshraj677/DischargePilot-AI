@@ -81,7 +81,7 @@ class EvidenceValidator(BaseValidator):
                     ),
                     affected_section=section,
                     affected_items=[fact.value],
-                    evidence=fact.short_evidence(),
+                    evidence=[fact.short_evidence()],
                     source_documents=[fact.source_document],
                 )
                 findings.append(finding)

@@ -34,12 +34,14 @@ class SummaryGeneratorTool(BaseTool):
         logger.info("SUMMARY_GENERATOR_STARTED", patient_id=patient_id, run_id=run_id)
 
         try:
-            # Safety findings are still computed and attached to the summary
-            # (review_flags, blocking_issues) for clinician visibility, but
-            # never block generation outright — escalation must never
-            # bypass SummaryGenerator. validate() defaults run_id to
-            # "no-run" without an AgentRunResult, so set the real one.
-            safety_report = SafetyValidationEngine().validate(kb)
+            # Safety findings (deterministic validators + the LLM clinical
+            # documentation reviewer) are still computed and attached to
+            # the summary (review_flags, blocking_issues) for clinician
+            # visibility, but never block generation outright — escalation
+            # must never bypass SummaryGenerator. validate_with_llm_review()
+            # defaults run_id to "no-run" without an AgentRunResult, so set
+            # the real one.
+            safety_report = await SafetyValidationEngine().validate_with_llm_review(kb, self.client)
             safety_report.run_id = run_id
 
             summary_service = SummaryService(db, self.client, self.settings)

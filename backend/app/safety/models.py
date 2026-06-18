@@ -43,6 +43,15 @@ class ReviewFlagCategory(str, Enum):
     PENDING_RESULT = "pending_result"
     SAFETY_CONCERN = "safety_concern"
     UNSUPPORTED_CLAIM = "unsupported_claim"
+    # Added for LLMClinicalSafetyReviewer's category vocabulary
+    # (conflict|missing_data|pending_result|medication|lab|guideline|other) —
+    # kept distinct from the deterministic-validator categories above
+    # rather than reusing them, since e.g. "medication" (the LLM's generic
+    # medication-related bucket) is broader than MEDICATION_DISCREPANCY.
+    MEDICATION = "medication"
+    LAB = "lab"
+    GUIDELINE = "guideline"
+    OTHER = "other"
 
 
 class SectionName(str, Enum):
@@ -75,8 +84,16 @@ class SafetyFinding(BaseModel):
     description: str
     affected_section: SectionName = SectionName.GLOBAL
     affected_items: List[str] = Field(default_factory=list)
-    evidence: Optional[str] = None
+    # List of evidence strings (source record excerpt, guideline citation,
+    # etc.) — required by LLMClinicalSafetyReviewer's spec: "Never generate
+    # findings without evidence." Deterministic validators leave this empty
+    # (their evidence is implicit in `description`/`affected_items`).
+    evidence: List[str] = Field(default_factory=list)
     source_documents: List[str] = Field(default_factory=list)
+    # "High" | "Moderate" | "Low" — set by LLM-driven validators (e.g.
+    # LLMClinicalSafetyReviewer); deterministic validators leave the
+    # default since they don't have a notion of confidence.
+    confidence: str = "Moderate"
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
